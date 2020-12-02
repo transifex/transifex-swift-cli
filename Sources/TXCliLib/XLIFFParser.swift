@@ -9,29 +9,45 @@
 import Foundation
 
 /// Structure that holds all the information for the translation units from a parsed XLIFF file.
-struct TranslationUnit {
-    var id: String
-    var source: String
-    var target: String
-    var note: String?
+public struct TranslationUnit {
+    public var id: String
+    public var source: String
+    public var target: String
+    public var file: String
+    public var note: String?
+}
+
+extension TranslationUnit: Equatable {
+    static public func ==(lhs: TranslationUnit, rhs: TranslationUnit) -> Bool {
+        let areEqual = lhs.id == rhs.id &&
+            lhs.source == rhs.source &&
+            lhs.target == rhs.target &&
+            lhs.file == rhs.file &&
+            lhs.note == rhs.note
+
+        return areEqual
+    }
 }
 
 /// Parses the provided XLIFF file as an XML and generates a list of translation units.
-class XLIFFParser : NSObject {
+public class XLIFFParser: NSObject {
     /// The parsed translation units.
     /// If parse() hasn't been called, it returns an empty array.
-    private(set) var results : [TranslationUnit] = []
+    public private(set) var results: [TranslationUnit] = []
 
     /// Internal constants and variables used during XML parsing
     fileprivate static let XML_TRANSUNIT_NAME = "trans-unit"
     fileprivate static let XML_SOURCE_NAME = "source"
     fileprivate static let XML_TARGET_NAME = "target"
     fileprivate static let XML_NOTE_NAME = "note"
+    fileprivate static let XML_FILE_NAME = "file"
     fileprivate static let XML_ID_ATTRIBUTE = "id"
+    fileprivate static let XML_ORIGINAL_ATTRIBUTE = "original"
     
-    fileprivate var activeTranslationUnit : PendingTranslationUnit?
-    fileprivate var activeElement : String?
-    fileprivate var parseError : Error?
+    fileprivate var activeTranslationUnit: PendingTranslationUnit?
+    fileprivate var activeElement: String?
+    fileprivate var activeFile: String?
+    fileprivate var parseError: Error?
     
     /// Internal struct that's used as a temporary data structure by the XML parser to store optional fields
     /// as they are populated. This struct is then used to populate the public TranslationUnit struct.
@@ -40,10 +56,11 @@ class XLIFFParser : NSObject {
         var source: String?
         var target: String?
         var note: String?
+        var file: String?
     }
     
     /// The underlying XML parser
-    private var parser : XMLParser
+    private var parser: XMLParser
     
     /// Initializes the parser for a certain XLIFF file.
     ///
@@ -83,11 +100,11 @@ class XLIFFParser : NSObject {
     ///
     /// - Parameters:
     ///   - fileURL: The url of the XLIFF file
-    init?(fileURL: URL) {
-        verboseLog("Initializing XLIFF parser for \(fileURL)...")
+    public init?(fileURL: URL) {
+        TXLogger.log("Initializing XLIFF parser for \(fileURL.path)...")
         
         guard let parser = XMLParser(contentsOf: fileURL) else {
-            verboseLog("Error reading file for parsing: \(fileURL)")
+            TXLogger.log("Error reading file for parsing: \(fileURL.path)")
             return nil
         }
         
@@ -101,16 +118,16 @@ class XLIFFParser : NSObject {
     /// Performs the XLIFF parsing, populating the results array with the parsed translation units.
     ///
     /// - Returns: True if the parsing was successful, false otherwise
-    func parse() -> Bool {
-        verboseLog("Parsing XLIFF...")
+    public func parse() -> Bool {
+        TXLogger.log("Parsing XLIFF...")
         
         if !parser.parse() {
-            verboseLog("Error parsing file")
+            TXLogger.log("Error parsing file")
             return false
         }
         
         if let parseError = parseError {
-            verboseLog("Error while parsing: \(parseError)")
+            TXLogger.log("Error while parsing: \(parseError)")
             return false
         }
         
@@ -119,7 +136,7 @@ class XLIFFParser : NSObject {
 }
 
 extension XLIFFParser : XMLParserDelegate {
-    func parser(_ parser: XMLParser, didStartElement elementName: String,
+    public func parser(_ parser: XMLParser, didStartElement elementName: String,
                 namespaceURI: String?, qualifiedName qName: String?,
                 attributes attributeDict: [String : String] = [:]) {
         if elementName == XLIFFParser.XML_TRANSUNIT_NAME,
@@ -133,17 +150,23 @@ extension XLIFFParser : XMLParserDelegate {
                 activeElement = elementName
             }
         }
+        else if elementName == XLIFFParser.XML_FILE_NAME,
+             let original = attributeDict[XLIFFParser.XML_ORIGINAL_ATTRIBUTE]{
+            activeFile = original
+        }
     }
     
-    func parser(_ parser: XMLParser, didEndElement elementName: String,
+    public func parser(_ parser: XMLParser, didEndElement elementName: String,
                 namespaceURI: String?, qualifiedName qName: String?) {
         if elementName == XLIFFParser.XML_TRANSUNIT_NAME {
-            if let activeTranslationUnit = activeTranslationUnit,
+            if let file = activeFile,
+               let activeTranslationUnit = activeTranslationUnit,
                let source = activeTranslationUnit.source,
                let target = activeTranslationUnit.target {
                 let translatioUnit = TranslationUnit(id: activeTranslationUnit.id,
                                                      source: source,
                                                      target: target,
+                                                     file: file,
                                                      note: activeTranslationUnit.note)
                 results.append(translatioUnit)
             }
@@ -157,9 +180,12 @@ extension XLIFFParser : XMLParserDelegate {
                 activeElement = nil
             }
         }
+        else if elementName == XLIFFParser.XML_FILE_NAME {
+            activeFile = nil
+        }
     }
     
-    func parser(_ parser: XMLParser, foundCharacters string: String) {
+    public func parser(_ parser: XMLParser, foundCharacters string: String) {
         if activeElement == XLIFFParser.XML_SOURCE_NAME {
             activeTranslationUnit?.source = string
         }
@@ -171,7 +197,7 @@ extension XLIFFParser : XMLParserDelegate {
         }
     }
     
-    func parser(_ parser: XMLParser, parseErrorOccurred parseError: Error) {
+    public func parser(_ parser: XMLParser, parseErrorOccurred parseError: Error) {
         self.parseError = parseError
     }
 }

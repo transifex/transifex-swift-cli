@@ -21,7 +21,7 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "TXCli",
+            name: "TXCliLib",
             dependencies: [
                 .product(name: "TransifexNative",
                          package: "TransifexNative"),
@@ -29,8 +29,11 @@ let package = Package(
                          package: "swift-argument-parser"),
             ]
         ),
+        .target(
+            name: "TXCli",
+            dependencies: ["TXCliLib"]),
         .testTarget(
             name: "TXCliTests",
-            dependencies: ["TXCli"]),
+            dependencies: ["TXCliLib"]),
     ]
 )

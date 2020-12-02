@@ -18,8 +18,7 @@ call it from any folder.
 
 In order to copy the executable, you can first build the project with 
 `swift build -c release` and then copy it with
-`cp .build/debug/transifex /usr/local/bin/txswift`. We recommend renaming 
-the tool to `txswift` but you can also copy the file as-is.
+`cp .build/release/transifex /usr/local/bin/`. 
 
 ### Usage
 
@@ -27,7 +26,7 @@ the tool to `txswift` but you can also copy the file as-is.
 
 Displays a help dialog with all the subcommands.
 
-`transifex push --token <transifex_token> --secret <transifex_secret> -project-name MyApp.xcodeproj`
+`transifex push --token <transifex_token> --secret <transifex_secret> --project MyApp.xcodeproj`
 
 Exports the base localization of the provided Xcode project, parses the generated XLIFF
 file, transforms the translation units to the format Transifex accepts and pushes them to
@@ -36,4 +35,4 @@ the Transifex server.
 If the developer has already set the enviroment variables mentioned above, then this
 command can be simplified to:
 
-`transifex push -project-name MyApp.xcodeproj`
+`transifex push --project MyApp.xcodeproj`
