@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Transifex
 
 /// Manages the export of the base localization (as specified by the sourceLocale) of a Xcode project
 /// via the xcodebuild -exportLocalizations command.
@@ -20,11 +21,13 @@ public class LocalizationExporter {
     /// The temporary export file URL that will be used to store the exported localizations.
     private let exportURL: URL
     
-    private static let TEMP_FOLDER_PREFIX = "transifexnative-"
+    private static let TEMP_FOLDER_PREFIX = "txios-cli-"
     
     private static let LOCALIZED_CONTENTS_FOLDER_NAME = "Localized Contents"
     private static let XCLOC_EXTENSION = "xcloc"
     private static let XLIFF_EXTENSION = "xliff"
+    
+    private let logHandler: TXLogHandler?
     
     /// Initializes the exporter and generates a temp directory for this session where the generated .xcloc
     /// folder will be created. Returns nil if the generated folder already exists and cannot be removed.
@@ -32,11 +35,14 @@ public class LocalizationExporter {
     /// - Parameters:
     ///   - sourceLocale: The source locale for the base localization
     ///   - project: The path to the project name (can be a relative path)
+    ///   - logHandler: Optional log handler
     public init?(sourceLocale: String,
-                 project: String) {
+                 project: String,
+                 logHandler: TXLogHandler? = nil) {
         self.sourceLocale = sourceLocale
         self.project = project
-        
+        self.logHandler = logHandler
+
         let uuidString = UUID().uuidString
         let tempExportURLPath = LocalizationExporter.TEMP_FOLDER_PREFIX + uuidString
         
@@ -56,7 +62,7 @@ public class LocalizationExporter {
                 // We don't care about "No such file or directory" errors.
             }
             else {
-                TXLogger.log("Error while removing old subfolder \(tempSubFolder.path): \(e)")
+                logHandler?.error("Error while removing old subfolder \(tempSubFolder.path): \(e)")
                 return nil
             }
         }
@@ -66,7 +72,7 @@ public class LocalizationExporter {
                                                     withIntermediateDirectories: false)
         }
         catch {
-            TXLogger.log("Error creating temp subfolder \(tempSubFolder.path): \(error)")
+            logHandler?.error("Error creating temp subfolder \(tempSubFolder.path): \(error)")
             return nil
         }
         
@@ -75,13 +81,13 @@ public class LocalizationExporter {
     
     /// Removes the temporary folder that was created during the initialization process
     public func cleanup() {
-        TXLogger.log("Removing temp subfolder \(exportURL.path)...")
+        logHandler?.verbose("[prompt]Removing temp subfolder[end] [file]\(exportURL.path)[end][prompt]...[end]")
 
         do {
             try FileManager.default.removeItem(at: exportURL)
         }
         catch {
-            TXLogger.log("Error removing temp subfolder \(exportURL.path): \(error)")
+            logHandler?.error("Error removing temp subfolder \(exportURL.path): \(error)")
         }
     }
     
@@ -90,7 +96,7 @@ public class LocalizationExporter {
     ///
     /// - Returns: The URL to the source locale XLIFF file, nil in case of an error.
     public func export() -> URL? {
-        TXLogger.log("Exporting localizations for project \(project) to \(exportURL.path)...")
+        logHandler?.verbose("[prompt]Exporting localizations for project \(project) to[end] [file]\(exportURL.path)[end][prompt]...[end]")
         
         let outputPipe = Pipe()
         let errorPipe = Pipe()
@@ -107,7 +113,10 @@ public class LocalizationExporter {
             try process.run()
         }
         catch {
-            TXLogger.log("Error executing xcodebuild: \(error)")
+            logHandler?.error("""
+Error executing xcodebuild:
+\(error)
+""")
             return nil
         }
 
@@ -130,13 +139,19 @@ public class LocalizationExporter {
         let output = String(decoding: outputData, as: UTF8.self)
 
         if output.count > 0 {
-            TXLogger.log("xcodebuild output: \(output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines))")
+            logHandler?.verbose("""
+[warn]xcodebuild output:[end]
+[warn]\(output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines))[end]
+""")
         }
 
         let error = String(decoding: errorData, as: UTF8.self)
 
         if error.count > 0 {
-            TXLogger.log("xcodebuild error: \(error.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines))")
+            logHandler?.verbose("""
+xcodebuild error:
+\(error.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines))
+""")
         }
         
         let xclocFilename = sourceLocale + "." + LocalizationExporter.XCLOC_EXTENSION
@@ -144,7 +159,7 @@ public class LocalizationExporter {
         let xclocURL = exportURL.appendingPathComponent(xclocFilename)
         
         guard FileManager.default.fileExists(atPath: xclocURL.path) else {
-            TXLogger.log("Generated \(xclocFilename) not found")
+            logHandler?.error("Generated \(xclocFilename) not found")
             return nil
         }
         
@@ -155,7 +170,7 @@ public class LocalizationExporter {
             .appendingPathComponent(xliffFilename)
         
         guard FileManager.default.fileExists(atPath: xliffURL.path) else {
-            TXLogger.log("Generated \(xliffFilename) not found")
+            logHandler?.error("Generated \(xliffFilename) not found")
             return nil
         }
         
