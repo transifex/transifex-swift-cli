@@ -7,25 +7,170 @@
 //
 
 import Foundation
+import Transifex
+
+/// Structure that holds all the information about a pluralization rule exported from the XLIFF file being
+/// parsed.
+public struct PluralizationRule {
+    private var components: [String]
+    
+    var sourceString: String!
+    var pluralKey: String?
+    var pluralRule: String?
+    var containsLocalizedFormatKey: Bool
+
+    var source: String?
+    var target: String?
+    var note: String?
+    
+    /// Initializes the structure with the id attribute found in the `trans-unit` XML tag of the XLIFF
+    /// file.
+    ///
+    /// From this id, the components are extracted (via the `extractComponents` static method) and
+    /// the properties are initialized:
+    ///
+    /// For example, if the id is the following:
+    /// "/unit-time.%d-minute(s):dict/d_unit_time:dict/one:dict/:string"
+    ///
+    /// Then the properties have the following values:
+    /// sourceString: "/unit-time.%d-minute(s)"
+    /// pluralKey: "d_unit_time"
+    /// pluralRule: "one"
+    /// containsLocalizedFormatKey: false
+    ///
+    /// - Parameter id: The id attribute
+    init?(with id: String) {
+        let components = PluralizationRule.extractComponents(from: id)
+        
+        if components.count < 2 {
+            return nil
+        }
+        
+        self.components = components
+        self.sourceString = components.first!
+        self.containsLocalizedFormatKey = id.contains("NSStringLocalizedFormatKey")
+        
+        if self.containsLocalizedFormatKey {
+            return
+        }
+        
+        self.pluralKey = components[1]
+        
+        if self.components.count > 2 {
+            self.pluralRule = self.components[2]
+        }
+    }
+    
+    mutating func updateSource(_ inSource: String) {
+        source = inSource
+    }
+    
+    mutating func updateTarget(_ inTarget: String) {
+        target = inTarget
+    }
+    
+    mutating func updateNote(_ inNote: String) {
+        note = inNote
+    }
+    
+    /// Parses the id attribute of the `trans-unit` XML tag, removes the types and trims the slash
+    /// characters and then splits the string into components that each represents a certain property to
+    /// be used during the initialization of the `PluralizationRule`
+    ///
+    /// e.g:
+    /// For id:
+    /// "/unit-time.%d-minute(s):dict/d_unit_time:dict/one:dict/:string"
+    /// The components returned are:
+    /// [ "unit-time.%d-minute(s)", "d_unit_time", "one"]
+    ///
+    /// - Parameter id: The id attribute
+    /// - Returns: The components that define this pluralization rule
+    static private func extractComponents(from id: String) -> [String] {
+        return id
+            .replacingOccurrences(of: ":dict", with: "")
+            .replacingOccurrences(of: ":string", with: "")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            .components(separatedBy: "/")
+    }
+    
+    /// Checks whether two pluralization rules have the same source string.
+    ///
+    /// Important when deciding whether a pluralization rule is part of the same `TranslationUnit`.
+    ///
+    /// - Parameter otherPluralizationRule: The other pluralization rule
+    /// - Returns: true if the `sourceString` properties are equal, false otherwise
+    func hasSameSourceString(with otherPluralizationRule: PluralizationRule) -> Bool {
+        return self.sourceString == otherPluralizationRule.sourceString
+    }
+}
+
+extension PluralizationRule: Equatable {
+    static public func ==(lhs: PluralizationRule, rhs: PluralizationRule) -> Bool {
+        return lhs.sourceString == rhs.sourceString &&
+            lhs.containsLocalizedFormatKey == rhs.containsLocalizedFormatKey &&
+            lhs.pluralKey == rhs.pluralKey &&
+            lhs.pluralRule == rhs.pluralRule &&
+            lhs.source == rhs.source &&
+            lhs.target == rhs.target &&
+            lhs.note == rhs.note
+    }
+}
 
 /// Structure that holds all the information for the translation units from a parsed XLIFF file.
 public struct TranslationUnit {
     public var id: String
     public var source: String
     public var target: String
-    public var file: String
+    public var files: [String] = []
     public var note: String?
+    public var pluralizationRules: [PluralizationRule]?
 }
 
 extension TranslationUnit: Equatable {
     static public func ==(lhs: TranslationUnit, rhs: TranslationUnit) -> Bool {
-        let areEqual = lhs.id == rhs.id &&
+        return lhs.id == rhs.id &&
             lhs.source == rhs.source &&
             lhs.target == rhs.target &&
-            lhs.file == rhs.file &&
-            lhs.note == rhs.note
+            lhs.files == rhs.files &&
+            lhs.note == rhs.note &&
+            lhs.pluralizationRules == rhs.pluralizationRules
+    }
+}
 
-        return areEqual
+extension TranslationUnit {
+    /// If the current `TranslationUnit` contains a number of `PluralizationRule` objects in its
+    /// property, then the method attempts to generate an ICU rule out of them that can be pushed to CDS.
+    ///
+    /// - Returns: The ICU pluralization rule if its generation is possible, nil otherwise.
+    public func generateICURuleIfPossible() -> String? {
+        guard let pluralizationRules = pluralizationRules,
+              pluralizationRules.count > 0 else {
+            return nil
+        }
+        
+        var icuRules : [String] = []
+        
+        for pluralizationRule in pluralizationRules {
+            if pluralizationRule.containsLocalizedFormatKey {
+                continue
+            }
+            
+            guard let pluralRule = pluralizationRule.pluralRule else {
+                continue
+            }
+            
+            guard let target = pluralizationRule.target else {
+                continue
+            }
+            
+            icuRules.append("\(pluralRule) { \(target) }")
+        }
+        
+        guard icuRules.count > 0 else {
+            return nil
+        }
+        
+        return "{cnt, plural, \(icuRules.joined(separator: " "))}"
     }
 }
 
@@ -36,31 +181,37 @@ public class XLIFFParser: NSObject {
     public private(set) var results: [TranslationUnit] = []
 
     /// Internal constants and variables used during XML parsing
-    fileprivate static let XML_TRANSUNIT_NAME = "trans-unit"
-    fileprivate static let XML_SOURCE_NAME = "source"
-    fileprivate static let XML_TARGET_NAME = "target"
-    fileprivate static let XML_NOTE_NAME = "note"
-    fileprivate static let XML_FILE_NAME = "file"
-    fileprivate static let XML_ID_ATTRIBUTE = "id"
-    fileprivate static let XML_ORIGINAL_ATTRIBUTE = "original"
+    private static let XML_TRANSUNIT_NAME = "trans-unit"
+    private static let XML_SOURCE_NAME = "source"
+    private static let XML_TARGET_NAME = "target"
+    private static let XML_NOTE_NAME = "note"
+    private static let XML_FILE_NAME = "file"
+    private static let XML_ID_ATTRIBUTE = "id"
+    private static let XML_ORIGINAL_ATTRIBUTE = "original"
     
-    fileprivate var activeTranslationUnit: PendingTranslationUnit?
-    fileprivate var activeElement: String?
-    fileprivate var activeFile: String?
-    fileprivate var parseError: Error?
+    private var activeTranslationUnit: PendingTranslationUnit?
+    private var activeElement: String?
+    private var activeFile: String?
+    private var parseError: Error?
+    
+    private var parsesStringDict = false
+    private var activePluralizationRule: PluralizationRule?
     
     /// Internal struct that's used as a temporary data structure by the XML parser to store optional fields
     /// as they are populated. This struct is then used to populate the public TranslationUnit struct.
-    fileprivate struct PendingTranslationUnit {
+    private struct PendingTranslationUnit {
         var id: String
         var source: String?
         var target: String?
         var note: String?
         var file: String?
+        var pluralizationRules: [PluralizationRule] = []
     }
     
     /// The underlying XML parser
     private var parser: XMLParser
+    
+    private let logHandler: TXLogHandler?
     
     /// Initializes the parser for a certain XLIFF file.
     ///
@@ -100,11 +251,15 @@ public class XLIFFParser: NSObject {
     ///
     /// - Parameters:
     ///   - fileURL: The url of the XLIFF file
-    public init?(fileURL: URL) {
-        TXLogger.log("Initializing XLIFF parser for \(fileURL.path)...")
+    ///   - logHandler: Optional log handler
+    public init?(fileURL: URL,
+                 logHandler: TXLogHandler? = nil) {
+        self.logHandler = logHandler
+        
+        logHandler?.verbose("[prompt]Initializing XLIFF parser for[end] [file]\(fileURL.path)[end][prompt]...[end]")
         
         guard let parser = XMLParser(contentsOf: fileURL) else {
-            TXLogger.log("Error reading file for parsing: \(fileURL.path)")
+            logHandler?.error("Error reading file for parsing: \(fileURL.path)")
             return nil
         }
         
@@ -119,19 +274,130 @@ public class XLIFFParser: NSObject {
     ///
     /// - Returns: True if the parsing was successful, false otherwise
     public func parse() -> Bool {
-        TXLogger.log("Parsing XLIFF...")
+        logHandler?.verbose("[prompt]Parsing XLIFF...[end]")
         
         if !parser.parse() {
-            TXLogger.log("Error parsing file")
+            logHandler?.error("Error parsing file")
             return false
         }
         
         if let parseError = parseError {
-            TXLogger.log("Error while parsing: \(parseError)")
+            logHandler?.error("Error while parsing: \(parseError)")
             return false
         }
         
         return true
+    }
+    
+    /// Consolidates results based on their ID and combines their properties if needed.
+    ///
+    /// Call this method after parse() call was successful.
+    ///
+    /// - Parameter results: An array of `TranslationUnit` structs, after being parsed.
+    /// - Returns: The consolidated results of the XLIFF parsing.
+    public static func consolidate(_ results: [TranslationUnit]) -> [TranslationUnit] {
+        guard results.count > 0 else {
+            return []
+        }
+        
+        /// Collapse exact duplicates, combine results that have the same key if possible and return
+        /// any results that have the same key but couldn't be combined.
+        var groupedResults: [String:[TranslationUnit]] = [:]
+        
+        for result in results {
+            if groupedResults[result.id] == nil {
+                groupedResults[result.id] = []
+            }
+            
+            groupedResults[result.id]?.append(result)
+        }
+        
+        var consolidatedResults : [TranslationUnit] = []
+        
+        for (resultID, results) in groupedResults {
+            guard let firstResult = results.first else {
+                continue
+            }
+            
+            guard results.count > 1 else {
+                consolidatedResults.append(firstResult)
+                continue
+            }
+            
+            var areDuplicates = true
+            var note = firstResult.note
+            var pluralizationRules = firstResult.pluralizationRules
+
+            for result in results[1...] {
+                if result.id != firstResult.id
+                    || result.source != firstResult.source
+                    || result.target != firstResult.target {
+                    areDuplicates = false
+                }
+                
+                if note == nil && result.note != nil {
+                    note = result.note
+                }
+                
+               if pluralizationRules == nil && result.pluralizationRules != nil {
+                    pluralizationRules = result.pluralizationRules
+                }
+            }
+            
+            // If for some reason those units don't have the same id, source
+            // or target, add them to the consolidated results as they are and
+            // let the CDS decide.
+            if !areDuplicates {
+                consolidatedResults.append(contentsOf: results)
+                continue
+            }
+
+            let files = results.compactMap({ (translationUnit) -> String in
+                // Files array is quaranteed to have one element at this point
+                translationUnit.files.first!
+            })
+
+            consolidatedResults.append(TranslationUnit(id: resultID,
+                                                       source: firstResult.source,
+                                                       target: firstResult.target,
+                                                       files: files,
+                                                       note: note,
+                                                       pluralizationRules: pluralizationRules))
+        }
+        
+        return consolidatedResults
+    }
+    
+    private func appendActivePluralizationRuleToTranslationUnit() {
+        guard let activePluralizationRule = activePluralizationRule else {
+            return
+        }
+        
+        activeTranslationUnit?.pluralizationRules.append(activePluralizationRule)
+    }
+    
+    private func appendTranslationUnitToResults() {
+        guard let activeTranslationUnit = activeTranslationUnit,
+              let file = activeFile,
+              let source = activeTranslationUnit.source,
+              let target = activeTranslationUnit.target else {
+            return
+        }
+        
+        var pluralizationRules : [PluralizationRule]? = nil
+        
+        if activeTranslationUnit.pluralizationRules.count > 0 {
+            pluralizationRules = activeTranslationUnit.pluralizationRules
+        }
+        
+        let translationUnit = TranslationUnit(id: activeTranslationUnit.id,
+                                              source: source,
+                                              target: target,
+                                              files: [file],
+                                              note: activeTranslationUnit.note,
+                                              pluralizationRules: pluralizationRules)
+        
+        results.append(translationUnit)
     }
 }
 
@@ -141,7 +407,41 @@ extension XLIFFParser : XMLParserDelegate {
                 attributes attributeDict: [String : String] = [:]) {
         if elementName == XLIFFParser.XML_TRANSUNIT_NAME,
            let id = attributeDict[XLIFFParser.XML_ID_ATTRIBUTE] {
-            activeTranslationUnit = PendingTranslationUnit(id: id)
+            
+            if parsesStringDict,
+               let pluralizationRule = PluralizationRule(with: id) {
+                
+                var shouldCreateTranslationUnit = false
+                
+                if let activePluralizationRule = activePluralizationRule,
+                   !activePluralizationRule.hasSameSourceString(with: pluralizationRule) {
+                    shouldCreateTranslationUnit = true
+                }
+                else if activeTranslationUnit == nil {
+                    shouldCreateTranslationUnit = true
+                }
+                
+                if activePluralizationRule != nil
+                   && activeTranslationUnit != nil {
+                    appendActivePluralizationRuleToTranslationUnit()
+                }
+                
+                if activeTranslationUnit != nil
+                   && shouldCreateTranslationUnit {
+                    appendTranslationUnitToResults()
+                }
+                
+                activePluralizationRule = pluralizationRule
+                
+                if shouldCreateTranslationUnit {
+                    activeTranslationUnit = PendingTranslationUnit(id: pluralizationRule.sourceString,
+                                                                   source: pluralizationRule.sourceString,
+                                                                   target: pluralizationRule.sourceString)
+                }
+            }
+            else {
+                activeTranslationUnit = PendingTranslationUnit(id: id)
+            }
         }
         else if elementName == XLIFFParser.XML_SOURCE_NAME
                 || elementName == XLIFFParser.XML_TARGET_NAME
@@ -153,24 +453,20 @@ extension XLIFFParser : XMLParserDelegate {
         else if elementName == XLIFFParser.XML_FILE_NAME,
              let original = attributeDict[XLIFFParser.XML_ORIGINAL_ATTRIBUTE]{
             activeFile = original
+
+            let fileURL = URL(fileURLWithPath: original)
+            
+            if fileURL.pathExtension == "stringsdict" {
+                parsesStringDict = true
+            }
         }
     }
     
     public func parser(_ parser: XMLParser, didEndElement elementName: String,
                 namespaceURI: String?, qualifiedName qName: String?) {
-        if elementName == XLIFFParser.XML_TRANSUNIT_NAME {
-            if let file = activeFile,
-               let activeTranslationUnit = activeTranslationUnit,
-               let source = activeTranslationUnit.source,
-               let target = activeTranslationUnit.target {
-                let translatioUnit = TranslationUnit(id: activeTranslationUnit.id,
-                                                     source: source,
-                                                     target: target,
-                                                     file: file,
-                                                     note: activeTranslationUnit.note)
-                results.append(translatioUnit)
-            }
-            
+        if elementName == XLIFFParser.XML_TRANSUNIT_NAME
+           && !parsesStringDict {
+            appendTranslationUnitToResults()
             activeTranslationUnit = nil
         }
         else if elementName == XLIFFParser.XML_SOURCE_NAME
@@ -181,19 +477,43 @@ extension XLIFFParser : XMLParserDelegate {
             }
         }
         else if elementName == XLIFFParser.XML_FILE_NAME {
+            if parsesStringDict {
+                appendActivePluralizationRuleToTranslationUnit()
+                appendTranslationUnitToResults()
+                
+                activeTranslationUnit = nil
+                activePluralizationRule = nil
+                parsesStringDict = false
+            }
+
             activeFile = nil
         }
     }
     
     public func parser(_ parser: XMLParser, foundCharacters string: String) {
         if activeElement == XLIFFParser.XML_SOURCE_NAME {
-            activeTranslationUnit?.source = string
+            if activePluralizationRule != nil {
+                activePluralizationRule?.updateSource(string)
+            }
+            else {
+                activeTranslationUnit?.source = string
+            }
         }
         else if activeElement == XLIFFParser.XML_TARGET_NAME {
-            activeTranslationUnit?.target = string
+            if activePluralizationRule != nil {
+                activePluralizationRule?.updateTarget(string)
+            }
+            else {
+                activeTranslationUnit?.target = string
+            }
         }
         else if activeElement == XLIFFParser.XML_NOTE_NAME {
-            activeTranslationUnit?.note = string
+            if activePluralizationRule != nil {
+                activePluralizationRule?.updateNote(string)
+            }
+            else {
+                activeTranslationUnit?.note = string
+            }
         }
     }
     

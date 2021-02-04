@@ -6,7 +6,7 @@
 //  Copyright © 2020 Transifex. All rights reserved.
 //
 
-import TransifexNative
+import Transifex
 import TXCliLib
 import ArgumentParser
 import Foundation
@@ -24,26 +24,25 @@ enum CommandError : Error {
     case translationsEncodingFailure
     case outputDirectoryCreationFailure
     case outputFileWritingFailure
+    case cdsCacheInvalidationFailure
 }
 
 /// Base command of TXCli app, this command describes the basic usage of the CLI app and lists all
 /// subcommands.
 struct TXCli: ParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "transifex",
-        abstract: """
-A command-line tool to push iOS translations to Transifex or download existing
-translations and transform them into ready to use assets that can be copied in
-the app bundle.
-""",
+        commandName: "txios-cli",
+        abstract: "Transifex command-line tool for iOS",
         discussion: """
-You can use Transifex Command Line Tool to push the base localization of your
-Xcode application to Transifex or download the translations of your Xcode
-application so that they can be added in the app bundle and used by the
-Transifex native library.
+This command-line tool helps developers push the iOS source strings to Transifex
+or download existing translations and transform them into ready-to-use assets
+that can be bundled with the iOS application.
+
+The tool can be also used to force CDS cache invalidation so that the next pull
+command will fetch fresh translations from CDS.
 """,
-        version: "0.2",
-        subcommands: [Push.self, Pull.self])
+        version: "1.0",
+        subcommands: [Push.self, Pull.self, Invalidate.self])
 }
 
 /// Shared options between all subcommands of TXCli.
@@ -61,21 +60,22 @@ struct Options: ParsableArguments {
     var verbose: Bool = false
 }
 
-/// The push subcommand of the CLI app that is responsible for exporting the base localization from a Xcode
+/// The push subcommand of the CLI app is responsible for exporting the base localization from a Xcode
 /// project, parsing the generated XLIFF file, generating the CDS-ready structure and pushing that structure
 /// to CDS using the provided  credentials.
 struct Push: ParsableCommand {
     @OptionGroup var options: Options
 
     public static let configuration = CommandConfiguration(
-        abstract: "Pushes translations to Transifex",
+        commandName: "push",
+        abstract: "Pushes source strings to Transifex.",
         discussion: """
 You can either provide the Transifex token and secret via enviroment variables
 (TRANSIFEX_TOKEN, TRANSIFEX_SECRET) or via the --token and --secret parameters.
 """
     )
     
-    @Option(name: .long, help: "Source locale, defaults to en")
+    @Option(name: .long, help: "Source locale")
     private var sourceLocale: String = "en"
 
     @Option(name: .long, help: """
@@ -98,26 +98,36 @@ Whether to keep the temporary folder that contains the generated .xcloc or not.
 """)
     private var keepTempFolder: Bool = false
     
+    @Option(name: .long, parsing: .upToNextOption, help: """
+A list of optional global tags to be included in all source strings pushed to
+the CDS server.
+""")
+    private var tags: [String] = []
+    
     func run() throws {
-        TXLogger.verbose = options.verbose
+        let logHandler = CliLogHandler()
+        logHandler.verbose = options.verbose
+        
+        TXLogger.setHandler(handler: logHandler)
         
         guard let transifexToken = options.token ?? ProcessInfo.processInfo.environment[Options.TOKEN_ENV] else {
-            TXLogger.log("Missing Transifex token")
+            logHandler.error("Missing Transifex token")
             throw CommandError.missingToken
         }
         
-        TXLogger.log("Using token: \(transifexToken)")
+        logHandler.verbose("[prompt]Using token: \(transifexToken)[end]")
         
         guard let transifexSecret = options.secret ?? ProcessInfo.processInfo.environment[Options.SECRET_ENV] else {
-            TXLogger.log("Missing Transifex secret")
+            logHandler.error("Missing Transifex secret")
             throw CommandError.missingSecret
         }
         
-        TXLogger.log("Using secret: \(transifexSecret)")
+        logHandler.verbose("[prompt]Using secret: \(transifexSecret)[end]")
         
         guard let localizationExporter = LocalizationExporter(sourceLocale: sourceLocale,
-                                                              project: project) else {
-            TXLogger.log("Failed to initialize localization exporter")
+                                                              project: project,
+                                                              logHandler: logHandler) else {
+            logHandler.error("Failed to initialize localization exporter")
             throw CommandError.exporterInitializationFailure
         }
         
@@ -128,70 +138,67 @@ Whether to keep the temporary folder that contains the generated .xcloc or not.
         }
         
         guard let xliffURL = localizationExporter.export() else {
-            TXLogger.log("Localization export failed")
+            logHandler.error("Localization export failed")
             throw CommandError.exportingFailure
         }
         
-        guard let parser = XLIFFParser(fileURL: xliffURL) else {
-            TXLogger.log("Failed to initialize XLIFF parser")
+        guard let parser = XLIFFParser(fileURL: xliffURL,
+                                       logHandler: logHandler) else {
+            logHandler.error("Failed to initialize XLIFF parser")
             throw CommandError.xliffParserInitializationFailure
         }
         
         if !parser.parse() {
-            TXLogger.log("XLIFF parsing failed")
+            logHandler.error("XLIFF parsing failed")
             throw CommandError.xliffParsingFailure
         }
         
-        var translations: [TxSourceString] = []
-        var occurrences: [String:[String]] = [:]
-        var addedKeys: [String] = []
+        var translations: [TXSourceString] = []
         
-        // Group occurrences based on the key id
-        for result in parser.results {
-            let key = generateKey(sourceString: result.id,
-                                  context: nil)
-
-            if occurrences[key] == nil {
-                occurrences[key] = []
+        for result in XLIFFParser.consolidate(parser.results) {
+            let key = txGenerateKey(sourceString: result.id,
+                                    context: nil)
+            
+            // Get the .target instead of the .source of the result as user
+            // might have localized the string for the base locale.
+            var sourceString = result.target
+            
+            // If the result contains string dict elements, convert them to
+            // ICU format and use that as a source string
+            if let icuRule = result.generateICURuleIfPossible() {
+                sourceString = icuRule
             }
             
-            occurrences[key]?.append(result.file)
-        }
-        
-        for result in parser.results {
-            let key = generateKey(sourceString: result.id,
-                                  context: nil)
+            let translationUnit = TXSourceString(key: key,
+                                                 sourceString: sourceString,
+                                                 occurrences: result.files,
+                                                 characterLimit: 0,
+                                                 developerComment: result.note,
+                                                 tags: tags)
             
             // Do not add the same key twice, occurrences is used for that
-            guard !addedKeys.contains(key) else {
+            guard !translations.contains(translationUnit) else {
                 continue
             }
             
-            addedKeys.append(key)
-            
-            let keyOccurrences = occurrences[key] ?? []
-            
-            let translationUnit = TxSourceString(key: key,
-                                                 sourceString: result.source,
-                                                 occurrences: keyOccurrences,
-                                                 characterLimit: 0,
-                                                 developerComment: result.note)
             translations.append(translationUnit)
         }
 
-        TXLogger.log("Initializing TxNative...")
+        logHandler.verbose("[high]Initializing TxNative...[end]")
         
-        TxNative.initialize(locales: LocaleState(sourceLocale: sourceLocale),
+        TXNative.initialize(locales: TXLocaleState(sourceLocale: sourceLocale),
                             token: transifexToken,
                             secret: transifexSecret,
                             cache: TXNoOpCache())
         
-        TXLogger.log("Pushing translations to CDS (Purge: \(purge ? "Yes" : "No"))...")
+        logHandler.info("""
+[high]Pushing[end] [num]\(translations.count)[end] [high]source strings to CDS ([end][prompt]Purge: \(purge ? "Yes" : "No")[end][high])...[end]
+""")
         
         // Block until the push logic completes using a semaphore.
         let semaphore = DispatchSemaphore(value: 0)
         var pushResult = false
-        TxNative.pushTranslations(translations,
+        TXNative.pushTranslations(translations,
                                   purge: purge) { (result) in
             pushResult = result
             semaphore.signal()
@@ -200,28 +207,28 @@ Whether to keep the temporary folder that contains the generated .xcloc or not.
         semaphore.wait()
         
         if !pushResult {
-            print("Error while pushing localizations to CDS")
+            logHandler.error("Error while pushing source strings to CDS")
             throw CommandError.cdsPushFailure
         }
         
-        print("Localizations pushed successfully")
+        logHandler.info("[success]✓[end] [num]\(translations.count)[end][success] source strings pushed successfully[end]")
     }
 }
 
-/// The pull subcommand of the CLI app that is responsible for downloading the latest translations from CDS
+/// The pull subcommand of the CLI app is responsible for downloading the latest translations from CDS
 /// and creating a file that contains all translations for all locales, to be used by the Transifex Native library
 /// after the file has been added in the application bundle.
 struct Pull: ParsableCommand {
     @OptionGroup var options: Options
 
     public static let configuration = CommandConfiguration(
+        commandName: "pull",
         abstract: """
-Downloads translations to Transifex and stores them into a file that can be
-imported in the Xcode project of the application using Transifex Native library.
+Downloads translations from Transifex and stores them in a file.
 """,
         discussion: """
-You can either provide the Transifex token and secret via enviroment variables
-(TRANSIFEX_TOKEN, TRANSIFEX_SECRET) or via the --token and --secret parameters.
+You can provide the Transifex token via an enviroment variable (TRANSIFEX_TOKEN)
+or via the --token parameter.
 """
     )
 
@@ -239,38 +246,34 @@ will try to create it (alongside any intermediate folders).
     private var output: String
     
     func run() throws {
-        TXLogger.verbose = options.verbose
+        let logHandler = CliLogHandler()
+        logHandler.verbose = options.verbose
+        
+        TXLogger.setHandler(handler: logHandler)
         
         guard let transifexToken = options.token ?? ProcessInfo.processInfo.environment[Options.TOKEN_ENV] else {
-            TXLogger.log("Missing Transifex token")
+            logHandler.error("Missing Transifex token")
             throw CommandError.missingToken
         }
         
-        TXLogger.log("Using token: \(transifexToken)")
+        logHandler.verbose("[prompt]Using token: \(transifexToken)[end]")
         
-        guard let transifexSecret = options.secret ?? ProcessInfo.processInfo.environment[Options.SECRET_ENV] else {
-            TXLogger.log("Missing Transifex secret")
-            throw CommandError.missingSecret
-        }
+        logHandler.info("[prompt]Initializing TxNative...[end]")
         
-        TXLogger.log("Using secret: \(transifexSecret)")
-        
-        TXLogger.log("Initializing TxNative...")
-        
-        TxNative.initialize(locales: LocaleState(sourceLocale: nil,
-                                                 appLocales: translatedLocales),
+        TXNative.initialize(locales: TXLocaleState(sourceLocale: nil,
+                                                   appLocales: translatedLocales),
                             token: transifexToken,
-                            secret: transifexSecret,
+                            secret: nil,
                             cache: TXNoOpCache())
         
-        TXLogger.log("Fetching translations from CDS...")
+        logHandler.info("[high]Fetching translations from CDS...[end]")
         
         // Block until the pull logic completes using a semaphore.
         let semaphore = DispatchSemaphore(value: 0)
         var appTranslations: [String: TXLocaleStrings] = [:]
         var appErrors: [Error] = []
         
-        TxNative.fetchTranslations(nil) { (fetchedTranslations, errors) in
+        TXNative.fetchTranslations(nil) { (fetchedTranslations, errors) in
             appErrors = errors
             appTranslations = fetchedTranslations
             semaphore.signal()
@@ -279,11 +282,13 @@ will try to create it (alongside any intermediate folders).
         semaphore.wait()
         
         guard appErrors.count == 0 else {
-            TXLogger.log("Error(s) while fetching translations from CDS: \(appErrors)")
+            logHandler.error("Errors while fetching translations from CDS: \(appErrors)")
             throw CommandError.cdsPullFailure
         }
         
-        TXLogger.log("\(appTranslations.count) localization(s) fetched successfully")
+        logHandler.info("""
+[success]✓[end] [num]\(appTranslations.count)[end] [success]localizations fetched successfully[end]
+""")
         
         var jsonData: Data?
         
@@ -291,13 +296,13 @@ will try to create it (alongside any intermediate folders).
             jsonData = try JSONEncoder().encode(appTranslations)
         }
         catch {
-            TXLogger.log("Error encoding translations: \(error)")
+            logHandler.error("Error encoding translations: \(error)")
         }
         
         guard let serializedData = jsonData,
               let serializedTranslations = String(data: serializedData,
                                                   encoding: .utf8) else {
-            TXLogger.log("Error serializing translations")
+            logHandler.error("Error serializing translations")
             throw CommandError.translationsEncodingFailure
         }
         
@@ -316,13 +321,13 @@ will try to create it (alongside any intermediate folders).
                                                     attributes: nil)
         }
         catch {
-            TXLogger.log("Error creating output folder: \(error)")
+            logHandler.error("Error creating output folder: \(error)")
             throw CommandError.outputDirectoryCreationFailure
         }
         
-        let outputFileURL = outputFolder.appendingPathComponent(TxNative.STRINGS_FILENAME)
+        let outputFileURL = outputFolder.appendingPathComponent(TXNative.STRINGS_FILENAME)
         
-        TXLogger.log("Writing file...")
+        logHandler.info("[high]Writing file...[end]")
         
         do {
             try serializedTranslations.write(to: outputFileURL,
@@ -330,22 +335,84 @@ will try to create it (alongside any intermediate folders).
                                              encoding: .utf8)
         }
         catch {
-            TXLogger.log("Error writing to file: \(error)")
+            logHandler.error("Error writing to file: \(error)")
             throw CommandError.outputFileWritingFailure
         }
         
-        print("""
-Translations file has been successfully generated!
+        logHandler.info("""
+[success]✓ Translations file has been successfully generated![end]
 
-Instructions:
+[prompt]You can find the generated file at:[end]
+[file]\(outputFileURL.path)[end]
 
-You can find the generated file at:
-\(outputFileURL.path)
-
-Copy the generated file to your Xcode project and make sure it is included in
+[prompt]Copy the generated file to your Xcode project and make sure it is included in
 the 'Copy Bundle Resources' build phase, so that Transifex Native library can
-look it up upon your application's launch.
+look it up upon your application's launch.[end]
 """)
+    }
+}
+
+/// The invalidate subcommand of the CLI app is responsible for invalidating the CDS cache so that any
+/// subsequent pull will fetch the fresh translations from CDS.
+struct Invalidate: ParsableCommand {
+    @OptionGroup var options: Options
+
+    public static let configuration = CommandConfiguration(
+        commandName: "invalidate",
+        abstract: "Forces CDS cache invalidation.",
+        discussion: """
+You can either provide the Transifex token and secret via enviroment variables
+(TRANSIFEX_TOKEN, TRANSIFEX_SECRET) or via the --token and --secret parameters.
+"""
+    )
+
+    func run() throws {
+        let logHandler = CliLogHandler()
+        logHandler.verbose = options.verbose
+        
+        TXLogger.setHandler(handler: logHandler)
+        
+        guard let transifexToken = options.token ?? ProcessInfo.processInfo.environment[Options.TOKEN_ENV] else {
+            logHandler.error("Missing Transifex token")
+            throw CommandError.missingToken
+        }
+        
+        logHandler.verbose("[prompt]Using token: \(transifexToken)[end]")
+        
+        guard let transifexSecret = options.secret ?? ProcessInfo.processInfo.environment[Options.SECRET_ENV] else {
+            logHandler.error("Missing Transifex secret")
+            throw CommandError.missingSecret
+        }
+        
+        logHandler.verbose("[prompt]Using secret: \(transifexSecret)[end]")
+        
+        logHandler.info("[prompt]Initializing TxNative...[end]")
+        
+        TXNative.initialize(locales: TXLocaleState(sourceLocale: nil,
+                                                   appLocales: []),
+                            token: transifexToken,
+                            secret: transifexSecret,
+                            cache: TXNoOpCache())
+        
+        logHandler.info("[high]Invalidating CDS cache...[end]")
+        
+        // Block until the invalidation logic completes using a semaphore.
+        let semaphore = DispatchSemaphore(value: 0)
+        var result = false
+        
+        TXNative.forceCacheInvalidation { (cacheInvalidated) in
+            result = cacheInvalidated
+            semaphore.signal()
+        }
+        
+        semaphore.wait()
+        
+        guard result == true else {
+            logHandler.error("CDS cache invalidation failed")
+            throw CommandError.cdsCacheInvalidationFailure
+        }
+        
+        logHandler.info("[success]✓ CDS cache invalidated successfully[end]")
     }
 }
 

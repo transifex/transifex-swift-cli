@@ -4,18 +4,18 @@
 import PackageDescription
 
 let package = Package(
-    name: "TXCli",
+    name: "TransifexCli",
     platforms: [
         .macOS(.v10_13)
     ],
     products: [
-        .executable(name: "transifex",
+        .executable(name: "txios-cli",
                     targets: ["TXCli"])
     ],
     dependencies: [
-        .package(name: "TransifexNative",
+        .package(name: "transifex",
                  url: "https://github.com/transifex/transifex-swift",
-                 .branch("devel")),
+                 from: "0.1.0"),
         .package(url: "https://github.com/apple/swift-argument-parser",
                  from: "0.3.0"),
     ],
@@ -23,8 +23,8 @@ let package = Package(
         .target(
             name: "TXCliLib",
             dependencies: [
-                .product(name: "TransifexNative",
-                         package: "TransifexNative"),
+                .product(name: "Transifex",
+                         package: "transifex"),
                 .product(name: "ArgumentParser",
                          package: "swift-argument-parser"),
             ]
