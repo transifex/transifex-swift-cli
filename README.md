@@ -75,11 +75,11 @@ command can be simplified to:
 
 ##### Pushing pluralizations limitations
 
-Currently (version 1.0) pluralization is supported but only for cases where one variable is
+Currently (version 0.1.0) pluralization is supported but only for cases where one variable is
 used per pluralization rule. More advanced cases such as nested pluralization rules (for
 example: "%d out of %d values entered") will be supported in future releases.
 
-Also, at the moment of writing (version 1.0), the `.stringsdict` specification only supports
+Also, at the moment of writing (version 0.1.0), the `.stringsdict` specification only supports
 plural types (`NSStringPluralRuleType`) which is the only possible value of the 
 `NSStringFormatSpecTypeKey` key ([Ref](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPInternational/StringsdictFileFormat/StringsdictFileFormat.html#//apple_ref/doc/uid/10000171i-CH16-SW4)).
 
