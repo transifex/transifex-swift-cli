@@ -1,6 +1,6 @@
 # Transifex Command Line Tool
 
-## Transifex Command Line Tool 1.0
+## Transifex Command Line Tool 0.1.0
 
 *Febrary 4, 2021*
 
