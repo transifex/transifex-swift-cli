@@ -245,6 +245,11 @@ will try to create it (alongside any intermediate folders).
 """)
     private var output: String
     
+    @Option(name: .long, parsing: .upToNextOption, help: """
+If set, only the strings that have all of the given tags will be downloaded.
+""")
+    private var withTagsOnly: [String]
+    
     func run() throws {
         let logHandler = CliLogHandler()
         logHandler.verbose = options.verbose
@@ -273,7 +278,7 @@ will try to create it (alongside any intermediate folders).
         var appTranslations: [String: TXLocaleStrings] = [:]
         var appErrors: [Error] = []
         
-        TXNative.fetchTranslations(nil) { (fetchedTranslations, errors) in
+        TXNative.fetchTranslations(tags: withTagsOnly) { (fetchedTranslations, errors) in
             appErrors = errors
             appTranslations = fetchedTranslations
             semaphore.signal()
