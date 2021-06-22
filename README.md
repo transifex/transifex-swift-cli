@@ -44,6 +44,11 @@ The following calls can be either made from within the `TXCli` project directory
 or after following the installation instructions above,  from any folder of your computer by:
 `txios-cli <cli command>`.
 
+Bear in mind that due to naming collision, the `--verbose` flag won't be detected if the
+`txios-cli` is executed via the `swift run` command, as the flag will be applied on the 
+`swift` executable instead. So to avoid collisions like this, it's recommended to execute
+`txios-cli` directly after building it.
+
 For simplicity the following examples will use the latter command.
 
 #### Help
