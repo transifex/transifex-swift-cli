@@ -102,7 +102,7 @@ Whether to keep the temporary folder that contains the generated .xcloc or not.
 A list of optional global tags to be included in all source strings pushed to
 the CDS server.
 """)
-    private var tags: [String] = []
+    private var appendTags: [String] = []
     
     func run() throws {
         let logHandler = CliLogHandler()
@@ -174,7 +174,7 @@ the CDS server.
                                                  occurrences: result.files,
                                                  characterLimit: 0,
                                                  developerComment: result.note,
-                                                 tags: tags)
+                                                 tags: appendTags)
             
             // Do not add the same key twice, occurrences is used for that
             guard !translations.contains(translationUnit) else {
