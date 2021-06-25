@@ -41,6 +41,36 @@ public class CliLogHandler: TXLogHandler {
     }
 }
 
+/// Extension responsible for printing the debug description of a TXSourceString to the console with proper
+/// styling.
+extension TXSourceString {
+    public override var debugDescription: String {
+        var description = "\n"
+        
+        description += "[green]\"\(sourceString)\"[end]\n"
+
+        if let context = context {
+            description += "[high]context:[end] \(context.debugDescription)\n"
+        }
+
+        if let developerComment = developerComment {
+            description += "[high]comment:[end] \(developerComment)\n"
+        }
+
+        if characterLimit > 0 {
+            description += "[high]character limit:[end] \(characterLimit)\n"
+        }
+
+        if let tags = tags, tags.count > 0 {
+            description += "[high]tags:[end] \(tags.joined(separator: ", "))\n"
+        }
+        
+        description += "   [high]occurrences:[end] [file]\(occurrences.joined(separator: ", "))[end]\n"
+
+        return description
+    }
+}
+
 /// Convenience class for adding color to console output.
 class CliSyntaxColor {
     static let WHITE_BOLD = "\u{001B}[0;1m"

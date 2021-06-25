@@ -104,6 +104,9 @@ the CDS server.
 """)
     private var appendTags: [String] = []
     
+    @Flag(name: .long, help: "Do not push to CDS.")
+    private var dryRun: Bool = false
+    
     func run() throws {
         let logHandler = CliLogHandler()
         logHandler.verbose = options.verbose
@@ -183,6 +186,17 @@ the CDS server.
             
             translations.append(translationUnit)
         }
+        
+        logHandler.info("""
+[high]Found[end] [num]\(translations.count)[end] [high]source strings[end]
+""")
+        
+        guard dryRun == false else {
+            logHandler.warning("[warn]Dry run: no strings will be pushed to CDS")
+            
+            logHandler.verbose("Translations: \(translations.debugDescription)")
+            return
+        }
 
         logHandler.verbose("[high]Initializing TxNative...[end]")
         
@@ -234,7 +248,8 @@ or via the --token parameter.
 
     @Option(name: .long, parsing: .upToNextOption, help: """
 A list of the available locales that the application supports and will be
-downloaded from CDS. The source locale, if added, is ignored.
+downloaded from CDS. If both source and target locales are provided in the list,
+they will also be requested from CDS.
 """)
     private var translatedLocales: [String]
     
