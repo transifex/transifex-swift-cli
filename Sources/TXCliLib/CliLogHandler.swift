@@ -44,6 +44,9 @@ public class CliLogHandler: TXLogHandler {
 /// Extension responsible for printing the debug description of a TXSourceString to the console with proper
 /// styling.
 extension TXSourceString {
+    /// Stylize the debug description of the TXSourceString for the CLI needs.
+    ///
+    /// We are aware of the 'method in category overrides method from class' warning(s) produced here.
     public override var debugDescription: String {
         var description = "\n"
         
