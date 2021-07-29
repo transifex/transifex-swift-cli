@@ -263,7 +263,7 @@ will try to create it (alongside any intermediate folders).
     @Option(name: .long, parsing: .upToNextOption, help: """
 If set, only the strings that have all of the given tags will be downloaded.
 """)
-    private var withTagsOnly: [String]
+    private var withTagsOnly: [String] = []
     
     func run() throws {
         let logHandler = CliLogHandler()
