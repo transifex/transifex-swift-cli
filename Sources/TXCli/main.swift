@@ -212,20 +212,49 @@ the CDS server.
         // Block until the push logic completes using a semaphore.
         let semaphore = DispatchSemaphore(value: 0)
         var pushResult = false
+        var pushErrors: [Error] = []
+        
         TXNative.pushTranslations(translations,
-                                  purge: purge) { (result) in
+                                  purge: purge) { (result, errors) in
             pushResult = result
+            pushErrors = errors
             semaphore.signal()
         }
         
         semaphore.wait()
         
         if !pushResult {
-            logHandler.error("Error while pushing source strings to CDS")
-            throw CommandError.cdsPushFailure
+            if containsMaxRetriesReachedError(pushErrors) {
+                logHandler.info("[prompt]Strings are queued for processing[end]")
+            }
+            else {
+                logHandler.error("Error while pushing source strings to CDS")
+                throw CommandError.cdsPushFailure
+            }
+        }
+        else {
+            logHandler.info("""
+[success]✓[end] [num]\(translations.count)[end][success] source strings pushed successfully[end]
+""")
+        }
+    }
+    
+    /// Reports whether the passed array of errors contains a max retries reached error or not.
+    ///
+    /// - Parameter errors: Passed array of errors as returned by the pushTranslations() method
+    /// - Returns: true if the array contains a max retries reached error, false otherwise
+    func containsMaxRetriesReachedError(_ errors: [Error]) -> Bool {
+        guard errors.count > 0 else {
+            return false
         }
         
-        logHandler.info("[success]✓[end] [num]\(translations.count)[end][success] source strings pushed successfully[end]")
+        for error in errors {
+            if case TXCDSError.maxRetriesReached = error {
+                return true
+            }
+        }
+        
+        return false
     }
 }
 

@@ -15,7 +15,7 @@ let package = Package(
     dependencies: [
         .package(name: "transifex",
                  url: "https://github.com/transifex/transifex-swift",
-                 from: "0.5.0"),
+                 from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-argument-parser",
                  from: "0.3.0"),
     ],
