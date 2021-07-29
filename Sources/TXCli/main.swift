@@ -10,6 +10,7 @@ import Transifex
 import TXCliLib
 import ArgumentParser
 import Foundation
+import CLISpinner
 
 /// All possible error codes that might trigger a failure during the execution of a TXCli command.
 enum CommandError : Error {
@@ -41,7 +42,7 @@ that can be bundled with the iOS application.
 The tool can be also used to force CDS cache invalidation so that the next pull
 command will fetch fresh translations from CDS.
 """,
-        version: "0.1.0",
+        version: "1.0.0",
         subcommands: [Push.self, Pull.self, Invalidate.self])
 }
 
@@ -209,23 +210,61 @@ the CDS server.
 [high]Pushing[end] [num]\(translations.count)[end] [high]source strings to CDS ([end][prompt]Purge: \(purge ? "Yes" : "No")[end][high])...[end]
 """)
         
+        let spinner = Spinner(pattern: .dots, text: "Pushing")
+        if !options.verbose {
+            spinner.start()
+        }
+        
         // Block until the push logic completes using a semaphore.
         let semaphore = DispatchSemaphore(value: 0)
         var pushResult = false
+        var pushErrors: [Error] = []
+        
         TXNative.pushTranslations(translations,
-                                  purge: purge) { (result) in
+                                  purge: purge) { (result, errors) in
             pushResult = result
+            pushErrors = errors
             semaphore.signal()
         }
         
         semaphore.wait()
         
-        if !pushResult {
-            logHandler.error("Error while pushing source strings to CDS")
-            throw CommandError.cdsPushFailure
+        if !options.verbose {
+            spinner.stopAndClear()
         }
         
-        logHandler.info("[success]✓[end] [num]\(translations.count)[end][success] source strings pushed successfully[end]")
+        if !pushResult {
+            if containsMaxRetriesReachedError(pushErrors) {
+                logHandler.info("[prompt]Strings are queued for processing[end]")
+            }
+            else {
+                logHandler.error("Error while pushing source strings to CDS")
+                throw CommandError.cdsPushFailure
+            }
+        }
+        else {
+            logHandler.info("""
+[success]✓[end] [num]\(translations.count)[end][success] source strings pushed successfully[end]
+""")
+        }
+    }
+    
+    /// Reports whether the passed array of errors contains a max retries reached error or not.
+    ///
+    /// - Parameter errors: Passed array of errors as returned by the pushTranslations() method
+    /// - Returns: true if the array contains a max retries reached error, false otherwise
+    func containsMaxRetriesReachedError(_ errors: [Error]) -> Bool {
+        guard errors.count > 0 else {
+            return false
+        }
+        
+        for error in errors {
+            if case TXCDSError.maxRetriesReached = error {
+                return true
+            }
+        }
+        
+        return false
     }
 }
 
@@ -263,7 +302,7 @@ will try to create it (alongside any intermediate folders).
     @Option(name: .long, parsing: .upToNextOption, help: """
 If set, only the strings that have all of the given tags will be downloaded.
 """)
-    private var withTagsOnly: [String]
+    private var withTagsOnly: [String] = []
     
     func run() throws {
         let logHandler = CliLogHandler()
@@ -288,6 +327,11 @@ If set, only the strings that have all of the given tags will be downloaded.
         
         logHandler.info("[high]Fetching translations from CDS...[end]")
         
+        let spinner = Spinner(pattern: .dots, text: "Fetching")
+        if !options.verbose {
+            spinner.start()
+        }
+        
         // Block until the pull logic completes using a semaphore.
         let semaphore = DispatchSemaphore(value: 0)
         var appTranslations: [String: TXLocaleStrings] = [:]
@@ -300,6 +344,10 @@ If set, only the strings that have all of the given tags will be downloaded.
         }
         
         semaphore.wait()
+        
+        if !options.verbose {
+            spinner.stopAndClear()
+        }
         
         guard appErrors.count == 0 else {
             logHandler.error("Errors while fetching translations from CDS: \(appErrors)")
