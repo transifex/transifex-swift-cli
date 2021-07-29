@@ -10,6 +10,7 @@ import Transifex
 import TXCliLib
 import ArgumentParser
 import Foundation
+import CLISpinner
 
 /// All possible error codes that might trigger a failure during the execution of a TXCli command.
 enum CommandError : Error {
@@ -209,6 +210,11 @@ the CDS server.
 [high]Pushing[end] [num]\(translations.count)[end] [high]source strings to CDS ([end][prompt]Purge: \(purge ? "Yes" : "No")[end][high])...[end]
 """)
         
+        let spinner = Spinner(pattern: .dots, text: "Pushing")
+        if !options.verbose {
+            spinner.start()
+        }
+        
         // Block until the push logic completes using a semaphore.
         let semaphore = DispatchSemaphore(value: 0)
         var pushResult = false
@@ -222,6 +228,10 @@ the CDS server.
         }
         
         semaphore.wait()
+        
+        if !options.verbose {
+            spinner.stopAndClear()
+        }
         
         if !pushResult {
             if containsMaxRetriesReachedError(pushErrors) {
@@ -317,6 +327,11 @@ If set, only the strings that have all of the given tags will be downloaded.
         
         logHandler.info("[high]Fetching translations from CDS...[end]")
         
+        let spinner = Spinner(pattern: .dots, text: "Fetching")
+        if !options.verbose {
+            spinner.start()
+        }
+        
         // Block until the pull logic completes using a semaphore.
         let semaphore = DispatchSemaphore(value: 0)
         var appTranslations: [String: TXLocaleStrings] = [:]
@@ -329,6 +344,10 @@ If set, only the strings that have all of the given tags will be downloaded.
         }
         
         semaphore.wait()
+        
+        if !options.verbose {
+            spinner.stopAndClear()
+        }
         
         guard appErrors.count == 0 else {
             logHandler.error("Errors while fetching translations from CDS: \(appErrors)")
