@@ -108,6 +108,12 @@ the CDS server.
     @Flag(name: .long, help: "Do not push to CDS.")
     private var dryRun: Bool = false
     
+    @Flag(name: .long, inversion: .prefixedEnableDisable,
+          exclusivity: .exclusive, help: """
+Control whether the keys of strings to be pushed should be hashed or not.
+""")
+    private var hashKeys: Bool = true
+
     func run() throws {
         let logHandler = CliLogHandler()
         logHandler.verbose = options.verbose
@@ -160,8 +166,8 @@ the CDS server.
         var translations: [TXSourceString] = []
         
         for result in XLIFFParser.consolidate(parser.results) {
-            let key = txGenerateKey(sourceString: result.id,
-                                    context: nil)
+            let key = hashKeys ? txGenerateKey(sourceString: result.id,
+                                               context: nil) : result.id
             
             // Get the .target instead of the .source of the result as user
             // might have localized the string for the base locale.
