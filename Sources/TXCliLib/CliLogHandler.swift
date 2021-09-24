@@ -50,6 +50,7 @@ extension TXSourceString {
     public override var debugDescription: String {
         var description = "\n"
         
+        description += "[yel]\"\(key)\"[end]: "
         description += "[green]\"\(sourceString)\"[end]\n"
 
         if let context = context {
