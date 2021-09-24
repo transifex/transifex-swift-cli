@@ -25,3 +25,15 @@
 - Displays custom message when max retries have been exhausted during the push operation.
 - Uses animated cursor from CLISpinner library while waiting for a response from CDS when
 verbose flag is not provided.
+
+## Transifex Command Line Tool 1.0.1
+
+*September 24, 2021*
+
+- Introduces boolean flag pair (`--enable-hash-keys`/`--disable-hash-keys`) to 
+control whether the keys of strings to be pushed should be hashed or not. 
+By default the value of this option is `true`, so the keys will be hashed unless
+`--disable-hash-keys` is provided.
+- Translation keys are now printed next to the source string when `--dry-run`
+option is provided.
+- Updates Transifex Swift library to 1.0.1.
