@@ -78,6 +78,38 @@ command can be simplified to:
 
 `txios-cli push --project MyApp.xcodeproj`
 
+##### Hashing keys on push
+
+By default, the `txios-cli` tool will hash the key of each source string that 
+is about to be pushed to CDS. 
+
+If the developer prefers to maintain the original keys as they already exist in 
+the application, they can provide the `--disable-hash-keys` option. 
+
+The keys are always printed to the console when the `--verbose` option is active.
+
+Example:
+
+`txios-cli push --project MyApp.xcodeproj --verbose`
+
+```
+Pushing translations to CDS: [
+"hashkey1": "string1"
+,
+"hashkey2": "string2"
+]...
+```
+
+`txios-cli push --project MyApp.xcodeproj --verbose --disable-hash-keys`
+
+```
+Pushing translations to CDS: [
+"string key 1": "string1"
+,
+"string key 2": "string2"
+]...
+```
+
 ##### Pushing pluralizations limitations
 
 Currently (version 0.1.0) pluralization is supported but only for cases where one variable is
