@@ -1,41 +1,41 @@
-# Transifex Command Line Tool
+# Transifex iOS SDK - Command Line Tool
 
 <p align="left">
 <img src="https://img.shields.io/badge/platforms-macOS-lightgrey.svg">
 <img src="https://github.com/transifex/transifex-swift-cli/workflows/CI/badge.svg">
 </p>
 
-Transifex Command Line Tool uses [Transifex iOS SDK](https://github.com/transifex/transifex-swift/) 
-to assist developers in pushing and pulling localizations of an iOS application (written in 
+Transifex Command Line Tool uses [Transifex iOS SDK](https://github.com/transifex/transifex-swift/)
+to assist developers in pushing and pulling localizations of an iOS application (written in
 Swift or Objective-C) to and from Transifex CDS.
 
-For pushing the base localization of the application, the tool uses the `xcodebuild` 
-command to export the base localization to a temporary folder, then parses the generated 
-`.xliff` file that contains all the localizable strings of the app and transforms them in the 
-format that CDS accepts (`TXSourceString`). After getting all the translated strings in the 
-proper format, it pushes them to CDS. For more information, look into the 
+For pushing the base localization of the application, the tool uses the `xcodebuild`
+command to export the base localization to a temporary folder, then parses the generated
+`.xliff` file that contains all the localizable strings of the app and transforms them in the
+format that CDS accepts (`TXSourceString`). After getting all the translated strings in the
+proper format, it pushes them to CDS. For more information, look into the
 [Pushing](#pushing) section of this README.
 
-For pulling the translated localizations, the developer must specify the locale codes and an 
-output folder, and the command line tool will download them, serialize them in a file 
-(`txstrings.json`) and store them in the specified folder. For more information, look into 
+For pulling the translated localizations, the developer must specify the locale codes and an
+output folder, and the command line tool will download them, serialize them in a file
+(`txstrings.json`) and store them in the specified folder. For more information, look into
 the [Pulling](#pulling) section of this README.
 
-Developer can also use the `invalidate` command to force CDS cache invalidation so 
+Developer can also use the `invalidate` command to force CDS cache invalidation so
 that the next `pull` command will fetch fresh translations from the CDS.
 
-The token and secret strings can be provided by the developer either as arguments in the 
+The token and secret strings can be provided by the developer either as arguments in the
 command line tool or as enviroment variables (`TRANSIFEX_TOKEN`, `TRANSIFEX_SECRET`).
 
 ### Installation
 
-You can either use the tool by typing: `swift run txios-cli` in the root directory of 
+You can either use the tool by typing: `swift run txios-cli` in the root directory of
 the project, or you can install the executable to `/usr/local/bin` directory so that you can
 call it from any folder.
 
-In order to copy the executable, you can first build the project with 
+In order to copy the executable, you can first build the project with
 `swift build -c release` and then copy it with
-`cp .build/release/txios-cli /usr/local/bin/txios-cli`. 
+`cp .build/release/txios-cli /usr/local/bin/txios-cli`.
 
 ### Usage
 
@@ -45,7 +45,7 @@ or after following the installation instructions above,  from any folder of your
 `txios-cli <cli command>`.
 
 Bear in mind that due to naming collision, the `--verbose` flag won't be detected if the
-`txios-cli` is executed via the `swift run` command, as the flag will be applied on the 
+`txios-cli` is executed via the `swift run` command, as the flag will be applied on the
 `swift` executable instead. So to avoid collisions like this, it's recommended to execute
 `txios-cli` directly after building it.
 
@@ -80,11 +80,11 @@ command can be simplified to:
 
 ##### Hashing keys on push
 
-By default, the `txios-cli` tool will hash the key of each source string that 
-is about to be pushed to CDS. 
+By default, the `txios-cli` tool will hash the key of each source string that
+is about to be pushed to CDS.
 
-If the developer prefers to maintain the original keys as they already exist in 
-the application, they can provide the `--disable-hash-keys` option. 
+If the developer prefers to maintain the original keys as they already exist in
+the application, they can provide the `--disable-hash-keys` option.
 
 The keys are always printed to the console when the `--verbose` option is active.
 
@@ -117,7 +117,7 @@ used per pluralization rule. More advanced cases such as nested pluralization ru
 example: "%d out of %d values entered") will be supported in future releases.
 
 Also, at the moment of writing (version 0.1.0), the `.stringsdict` specification only supports
-plural types (`NSStringPluralRuleType`) which is the only possible value of the 
+plural types (`NSStringPluralRuleType`) which is the only possible value of the
 `NSStringFormatSpecTypeKey` key ([Ref](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPInternational/StringsdictFileFormat/StringsdictFileFormat.html#//apple_ref/doc/uid/10000171i-CH16-SW4)).
 
 If more rule types are added in the `.stringsdict` specification, the XLIFF parser must be
