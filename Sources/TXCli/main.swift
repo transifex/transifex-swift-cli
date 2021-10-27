@@ -42,7 +42,7 @@ that can be bundled with the iOS application.
 The tool can be also used to force CDS cache invalidation so that the next pull
 command will fetch fresh translations from CDS.
 """,
-        version: "1.0.1",
+        version: "1.0.2",
         subcommands: [Push.self, Pull.self, Invalidate.self])
 }
 
@@ -80,8 +80,8 @@ You can either provide the Transifex token and secret via enviroment variables
     private var sourceLocale: String = "en"
 
     @Option(name: .long, help: """
-Path to the .xcodeproj file of the project
-(e.g. ../MyProject/myproject.xcodeproj)
+Either the path to the project's .xcodeproj (e.g. ../MyProject/myproject.xcodeproj),
+or the path to the generated .xliff (e.g. ../en.xliff).
 """)
     private var project : String
     
@@ -134,25 +134,41 @@ Control whether the keys of strings to be pushed should be hashed or not.
         
         logHandler.verbose("[prompt]Using secret: \(transifexSecret)[end]")
         
-        guard let localizationExporter = LocalizationExporter(sourceLocale: sourceLocale,
-                                                              project: project,
-                                                              logHandler: logHandler) else {
-            logHandler.error("Failed to initialize localization exporter")
-            throw CommandError.exporterInitializationFailure
-        }
+        var xliffURL : URL? = nil
+        let url = URL(fileURLWithPath: project)
         
-        defer {
-            if !keepTempFolder {
-                localizationExporter.cleanup()
+        if url.pathExtension == "xliff" {
+            xliffURL = url
+            logHandler.verbose("[prompt]XLIFF file detected: \(xliffURL!)[end]")
+        }
+        else {
+            guard let localizationExporter = LocalizationExporter(sourceLocale: sourceLocale,
+                                                                  project: project,
+                                                                  logHandler: logHandler) else {
+                logHandler.error("Failed to initialize localization exporter")
+                throw CommandError.exporterInitializationFailure
             }
+        
+            defer {
+                if !keepTempFolder {
+                    localizationExporter.cleanup()
+                }
+            }
+        
+            guard let exportXliffURL = localizationExporter.export() else {
+                logHandler.error("Localization export failed")
+                throw CommandError.exportingFailure
+            }
+            
+            xliffURL = exportXliffURL
         }
         
-        guard let xliffURL = localizationExporter.export() else {
+        guard let fileURL = xliffURL else {
             logHandler.error("Localization export failed")
             throw CommandError.exportingFailure
         }
         
-        guard let parser = XLIFFParser(fileURL: xliffURL,
+        guard let parser = XLIFFParser(fileURL: fileURL,
                                        logHandler: logHandler) else {
             logHandler.error("Failed to initialize XLIFF parser")
             throw CommandError.xliffParserInitializationFailure

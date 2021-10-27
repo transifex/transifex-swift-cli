@@ -37,3 +37,10 @@ By default the value of this option is `true`, so the keys will be hashed unless
 - Translation keys are now printed next to the source string when `--dry-run`
 option is provided.
 - Updates Transifex Swift library to 1.0.1.
+
+## Transifex Command Line Tool 1.0.2
+
+*October 26, 2021*
+
+- Introduces parsing directly from an `.xliff` file using the `--project`
+argument of the push command.
