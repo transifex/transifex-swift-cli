@@ -44,3 +44,9 @@ option is provided.
 
 - Introduces parsing directly from an `.xliff` file using the `--project`
 argument of the push command.
+
+## Transifex Command Line Tool 1.0.3
+
+*January 14, 2021*
+
+- Fixes regression introduced in 1.0.2 regarding the temporary directory that stores the XLIFF structure being removed prematurely.
