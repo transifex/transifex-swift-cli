@@ -137,25 +137,29 @@ Control whether the keys of strings to be pushed should be hashed or not.
         var xliffURL : URL? = nil
         let url = URL(fileURLWithPath: project)
         
+        var localizationExporter : LocalizationExporter? = nil
+        
+        defer {
+            if !keepTempFolder {
+                localizationExporter?.cleanup()
+            }
+        }
+        
         if url.pathExtension == "xliff" {
             xliffURL = url
             logHandler.verbose("[prompt]XLIFF file detected: \(xliffURL!)[end]")
         }
         else {
-            guard let localizationExporter = LocalizationExporter(sourceLocale: sourceLocale,
+            guard let locExporter = LocalizationExporter(sourceLocale: sourceLocale,
                                                                   project: project,
                                                                   logHandler: logHandler) else {
                 logHandler.error("Failed to initialize localization exporter")
                 throw CommandError.exporterInitializationFailure
             }
         
-            defer {
-                if !keepTempFolder {
-                    localizationExporter.cleanup()
-                }
-            }
+            localizationExporter = locExporter
         
-            guard let exportXliffURL = localizationExporter.export() else {
+            guard let exportXliffURL = localizationExporter?.export() else {
                 logHandler.error("Localization export failed")
                 throw CommandError.exportingFailure
             }
