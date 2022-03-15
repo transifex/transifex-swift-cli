@@ -50,3 +50,9 @@ argument of the push command.
 *January 14, 2021*
 
 - Fixes regression introduced in 1.0.2 regarding the temporary directory that stores the XLIFF structure being removed prematurely.
+
+## Transifex Command Line Tool 1.0.4
+
+*March 15, 2022*
+
+- Fixes issue where special characters in XLIFF were not producing correct source strings.

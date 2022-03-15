@@ -62,15 +62,15 @@ public struct PluralizationRule {
     }
     
     mutating func updateSource(_ inSource: String) {
-        source = inSource
+        source = (source ?? "") + inSource
     }
     
     mutating func updateTarget(_ inTarget: String) {
-        target = inTarget
+        target = (target ?? "") + inTarget
     }
     
     mutating func updateNote(_ inNote: String) {
-        note = inNote
+        note = (note ?? "") + inNote
     }
     
     /// Parses the id attribute of the `trans-unit` XML tag, removes the types and trims the slash
@@ -206,6 +206,18 @@ public class XLIFFParser: NSObject {
         var note: String?
         var file: String?
         var pluralizationRules: [PluralizationRule] = []
+        
+        mutating func updateSource(_ inSource: String) {
+            source = (source ?? "") + inSource
+        }
+        
+        mutating func updateTarget(_ inTarget: String) {
+            target = (target ?? "") + inTarget
+        }
+        
+        mutating func updateNote(_ inNote: String) {
+            note = (note ?? "") + inNote
+        }
     }
     
     /// The underlying XML parser
@@ -496,7 +508,7 @@ extension XLIFFParser : XMLParserDelegate {
                 activePluralizationRule?.updateSource(string)
             }
             else {
-                activeTranslationUnit?.source = string
+                activeTranslationUnit?.updateSource(string)
             }
         }
         else if activeElement == XLIFFParser.XML_TARGET_NAME {
@@ -504,7 +516,7 @@ extension XLIFFParser : XMLParserDelegate {
                 activePluralizationRule?.updateTarget(string)
             }
             else {
-                activeTranslationUnit?.target = string
+                activeTranslationUnit?.updateTarget(string)
             }
         }
         else if activeElement == XLIFFParser.XML_NOTE_NAME {
@@ -512,7 +524,7 @@ extension XLIFFParser : XMLParserDelegate {
                 activePluralizationRule?.updateNote(string)
             }
             else {
-                activeTranslationUnit?.note = string
+                activeTranslationUnit?.updateNote(string)
             }
         }
     }

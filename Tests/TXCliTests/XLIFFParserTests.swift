@@ -217,9 +217,52 @@ final class XLIFFParserTests: XCTestCase {
         XCTAssertEqual(icuRule, expectedIcuRule)
     }
     
+    func testXLIFFParserWithQuotes() {
+        let fileURL = tempXLIFFFileURL()
+        let sampleXLIFF = """
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
+  <file original="Localizable.strings" source-language="en" target-language="en" datatype="plaintext">
+    <header>
+      <tool tool-id="com.apple.dt.xcode" tool-name="Xcode" tool-version="12.3" build-num="12C33"/>
+    </header>
+    <body>
+      <trans-unit id="vyW-d6-PC8.text" xml:space="preserve">
+        <source>We’re réa`dy!</source>
+        <target>We’re réa`dy!</target>
+        <note>Class = "UILabel"; text = "We’re réa`dy!"; ObjectID = "vyW-d6-PC8";</note>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>
+"""
+        do {
+            try sampleXLIFF.write(to: fileURL, atomically: true, encoding: .utf8)
+        }
+        catch { }
+        
+        let xliffParser = XLIFFParser(fileURL: fileURL)
+        XCTAssertNotNil(xliffParser, "Failed to initialize parser")
+
+        let parsed = xliffParser!.parse()
+
+        XCTAssertTrue(parsed)
+
+        let results = xliffParser!.results
+
+        XCTAssertTrue(results.count == 1)
+
+        let result = results.first!
+        
+        XCTAssertEqual(result.source, "We’re réa`dy!")
+        
+        XCTAssertEqual(result.target, "We’re réa`dy!")
+    }
+    
     static var allTests = [
         ("testXLIFFParser", testXLIFFParser),
         ("testXLIFFParserWithStringsDict", testXLIFFParserWithStringsDict),
         ("testXLIFFResultConsolidation", testXLIFFResultConsolidation),
+        ("testXLIFFParserWithQuotes", testXLIFFParserWithQuotes),
     ]
 }
