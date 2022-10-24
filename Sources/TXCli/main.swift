@@ -80,7 +80,7 @@ You can either provide the Transifex token and secret via enviroment variables
     private var sourceLocale: String = "en"
 
     @Option(name: .long, help: """
-Either the path to the project's .xcodeproj (e.g. ../MyProject/myproject.xcodeproj),
+Either the path to the project's .xcodeproj or .xcworkspace (e.g. ../MyProject/myproject.xcodeproj),
 or the path to the generated .xliff (e.g. ../en.xliff).
 """)
     private var project : String
@@ -135,7 +135,7 @@ Control whether the keys of strings to be pushed should be hashed or not.
         logHandler.verbose("[prompt]Using secret: \(transifexSecret)[end]")
         
         var xliffURL : URL? = nil
-        let url = URL(fileURLWithPath: project)
+        let projectURL = URL(fileURLWithPath: project)
         
         var localizationExporter : LocalizationExporter? = nil
         
@@ -145,14 +145,14 @@ Control whether the keys of strings to be pushed should be hashed or not.
             }
         }
         
-        if url.pathExtension == "xliff" {
-            xliffURL = url
+        if projectURL.pathExtension == "xliff" {
+            xliffURL = projectURL
             logHandler.verbose("[prompt]XLIFF file detected: \(xliffURL!)[end]")
         }
         else {
             guard let locExporter = LocalizationExporter(sourceLocale: sourceLocale,
-                                                                  project: project,
-                                                                  logHandler: logHandler) else {
+                                                         project: projectURL,
+                                                         logHandler: logHandler) else {
                 logHandler.error("Failed to initialize localization exporter")
                 throw CommandError.exporterInitializationFailure
             }
