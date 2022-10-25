@@ -56,3 +56,10 @@ argument of the push command.
 *March 15, 2022*
 
 - Fixes issue where special characters in XLIFF were not producing correct source strings.
+
+## Transifex Command Line Tool 1.0.5
+
+*October 25, 2022*
+
+- Allows users to enter a `.xcworkspace` as a `project` argument and handles it correctly.
+

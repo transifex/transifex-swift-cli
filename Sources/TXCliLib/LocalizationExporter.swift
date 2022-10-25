@@ -15,8 +15,8 @@ public class LocalizationExporter {
     /// The source (base) locale of the project that will be used for looking up the generated XLIFF file.
     let sourceLocale: String
     
-    /// The relative or absolute path to the .xcodeproj folder of the Xcode project.
-    let project: String
+    /// The relative or absolute file URL to the .xcodeproj or .xcworkspace folder of the Xcode project.
+    let project: URL
     
     /// The temporary export file URL that will be used to store the exported localizations.
     private let exportURL: URL
@@ -37,8 +37,14 @@ public class LocalizationExporter {
     ///   - project: The path to the project name (can be a relative path)
     ///   - logHandler: Optional log handler
     public init?(sourceLocale: String,
-                 project: String,
+                 project: URL,
                  logHandler: TXLogHandler? = nil) {
+        guard project.pathExtension == "xcodeproj"
+                || project.pathExtension == "xcworkspace" else {
+            logHandler?.error("Error: project parameter is not a .xcodeproj or .xcworkspace")
+            return nil
+        }
+
         self.sourceLocale = sourceLocale
         self.project = project
         self.logHandler = logHandler
@@ -98,6 +104,7 @@ public class LocalizationExporter {
     public func export() -> URL? {
         logHandler?.verbose("[prompt]Exporting localizations for project \(project) to[end] [file]\(exportURL.path)[end][prompt]...[end]")
         
+        let isProject = project.pathExtension == "xcodeproj"
         let outputPipe = Pipe()
         let errorPipe = Pipe()
 
@@ -105,7 +112,7 @@ public class LocalizationExporter {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/xcodebuild")
         process.arguments = [ "-exportLocalizations",
                               "-localizationPath", exportURL.path,
-                              "-project", project]
+                              isProject ? "-project" : "-workspace", project.path]
         process.standardOutput = outputPipe
         process.standardError = errorPipe
         
