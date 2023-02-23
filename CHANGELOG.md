@@ -63,3 +63,8 @@ argument of the push command.
 
 - Allows users to enter a `.xcworkspace` as a `project` argument and handles it correctly.
 
+## Transifex Command Line Tool 1.0.6
+
+*February 23, 2023*
+
+- Introduces status filter option in pull command.

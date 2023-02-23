@@ -42,7 +42,7 @@ that can be bundled with the iOS application.
 The tool can be also used to force CDS cache invalidation so that the next pull
 command will fetch fresh translations from CDS.
 """,
-        version: "1.0.5",
+        version: "1.0.6",
         subcommands: [Push.self, Pull.self, Invalidate.self])
 }
 
