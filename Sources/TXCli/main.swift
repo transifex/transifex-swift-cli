@@ -110,7 +110,8 @@ the CDS server.
     
     @Flag(name: .long, inversion: .prefixedEnableDisable,
           exclusivity: .exclusive, help: """
-Control whether the keys of strings to be pushed should be hashed or not.
+Control whether the keys of strings to be pushed should be hashed (true) or not
+(false).
 """)
     private var hashKeys: Bool = true
 
@@ -327,9 +328,19 @@ will try to create it (alongside any intermediate folders).
     
     @Option(name: .long, parsing: .upToNextOption, help: """
 If set, only the strings that have all of the given tags will be downloaded.
+
+This option can be used alongside the --with-status-only option.
 """)
     private var withTagsOnly: [String] = []
     
+    @Option(name: .long, help: """
+If set, only the strings that have the provided status assigned will be
+downloaded.
+
+This option can be used alongside the --with-tags-only option.
+""")
+    private var withStatusOnly: String?
+
     func run() throws {
         let logHandler = CliLogHandler()
         logHandler.verbose = options.verbose
@@ -363,7 +374,8 @@ If set, only the strings that have all of the given tags will be downloaded.
         var appTranslations: [String: TXLocaleStrings] = [:]
         var appErrors: [Error] = []
         
-        TXNative.fetchTranslations(tags: withTagsOnly) { (fetchedTranslations, errors) in
+        TXNative.fetchTranslations(tags: withTagsOnly,
+                                   status: withStatusOnly) { (fetchedTranslations, errors) in
             appErrors = errors
             appTranslations = fetchedTranslations
             semaphore.signal()

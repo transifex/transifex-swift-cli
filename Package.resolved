@@ -33,8 +33,8 @@
         "repositoryURL": "https://github.com/transifex/transifex-swift",
         "state": {
           "branch": null,
-          "revision": "7c1326b1a80fb37923cb4782d63293766ce8ffa7",
-          "version": "1.0.1"
+          "revision": "bb5067a395e7343a9c5697bb365baffff3d178f8",
+          "version": "1.0.4"
         }
       }
     ]
