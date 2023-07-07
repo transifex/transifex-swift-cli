@@ -86,15 +86,6 @@ or the path to the generated .xliff (e.g. ../en.xliff).
     private var project : String
     
     @Flag(name: .long, help: """
-If purge: true, then replace the entire resource content with the pushed content
-of this request.
-
-If purge: false (default), then append the source content of this request to the
-existing resource content.
-""")
-    private var purge: Bool = false
-    
-    @Flag(name: .long, help: """
 Whether to keep the temporary folder that contains the generated .xcloc or not.
 """)
     private var keepTempFolder: Bool = false
@@ -105,15 +96,53 @@ the CDS server.
 """)
     private var appendTags: [String] = []
     
-    @Flag(name: .long, help: "Do not push to CDS.")
-    private var dryRun: Bool = false
-    
     @Flag(name: .long, inversion: .prefixedEnableDisable,
           exclusivity: .exclusive, help: """
 Control whether the keys of strings to be pushed should be hashed (true) or not
 (false).
 """)
     private var hashKeys: Bool = true
+
+    @Flag(name: .long, help: """
+If purge: true, then replace the entire resource content with the pushed content
+of this request.
+
+If purge: false (default), then append the source content of this request to the
+existing resource content.
+""")
+    private var purge: Bool = false
+
+    @Flag(name: .long, help: """
+If override-tags: true, then replace the existing string tags with the tags of
+this request.
+
+If override-tags: false (default), then append tags from source content to tags
+of existing strings instead of overwriting them.
+""")
+    private var overrideTags: Bool = false
+
+    @Flag(name: .long, help: """
+If override-occurrences: true, then replace the existing string occurrences with
+the occurrences of this request.
+
+If override-occurrences: false (default), then append occurrences from source
+content to occurrences of existing strings instead of overwriting them.
+""")
+    private var overrideOccurrences: Bool = false
+
+    @Flag(name: .long, help: """
+If keep-translations: true (default), then preserve translations on source
+content updates.
+
+If keep-translations: false, then delete translations on source string content
+updates.
+""")
+    private var keepTranslations: Bool = true
+
+    @Flag(name: .long, help: """
+Emulate a content push, without doing actual changes.
+""")
+    private var dryRun: Bool = false
 
     func run() throws {
         let logHandler = CliLogHandler()
@@ -221,13 +250,6 @@ Control whether the keys of strings to be pushed should be hashed (true) or not
 [high]Found[end] [num]\(translations.count)[end] [high]source strings[end]
 """)
         
-        guard dryRun == false else {
-            logHandler.warning("[warn]Dry run: no strings will be pushed to CDS")
-            
-            logHandler.verbose("Translations: \(translations.debugDescription)")
-            return
-        }
-
         logHandler.verbose("[high]Initializing TxNative...[end]")
         
         TXNative.initialize(locales: TXLocaleState(sourceLocale: sourceLocale),
@@ -250,8 +272,16 @@ Control whether the keys of strings to be pushed should be hashed (true) or not
         var pushErrors: [Error] = []
         var pushWarnings: [Error] = []
         
+        let configuration = TXPushConfiguration(purge: purge,
+                                                overrideTags: overrideTags,
+                                                overrideOccurrences: overrideOccurrences,
+                                                keepTranslations: keepTranslations,
+                                                dryRun: dryRun)
+
+        logHandler.verbose("Push configuration: \(configuration.debugDescription)")
+
         TXNative.pushTranslations(translations,
-                                  purge: purge) { (result, errors, warnings) in
+                                  configuration: configuration) { (result, errors, warnings) in
             pushResult = result
             pushErrors = errors
             pushWarnings = warnings
