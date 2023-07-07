@@ -21,11 +21,35 @@ public class CliLogHandler: TXLogHandler {
     }
     
     public func warning(_ message: String) {
-        log(message)
+        warning(message, trailingLine: false)
+    }
+
+    public func warning(_ message: String, trailingLine: Bool = false) {
+        if trailingLine {
+            log("""
+[prompt]\(message)[end]
+
+""")
+        }
+        else {
+            log("[prompt]\(message)[end]")
+        }
     }
     
     public func error(_ message: String) {
-        log("[error]\(message)[end]")
+        error(message, trailingLine: false)
+    }
+
+    public func error(_ message: String, trailingLine: Bool = false) {
+        if trailingLine {
+            log("""
+[error]\(message)[end]
+
+""")
+        }
+        else {
+            log("[error]\(message)[end]")
+        }
     }
     
     public func verbose(_ message: String) {

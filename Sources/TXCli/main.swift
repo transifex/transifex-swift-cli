@@ -184,9 +184,11 @@ Control whether the keys of strings to be pushed should be hashed (true) or not
             throw CommandError.xliffParsingFailure
         }
         
+        let filteredResults = XLIFFParser.filter(parser.results)
+
         var translations: [TXSourceString] = []
         
-        for result in XLIFFParser.consolidate(parser.results) {
+        for result in XLIFFParser.consolidate(filteredResults) {
             let key = hashKeys ? txGenerateKey(sourceString: result.id,
                                                context: nil) : result.id
             
@@ -246,11 +248,13 @@ Control whether the keys of strings to be pushed should be hashed (true) or not
         let semaphore = DispatchSemaphore(value: 0)
         var pushResult = false
         var pushErrors: [Error] = []
+        var pushWarnings: [Error] = []
         
         TXNative.pushTranslations(translations,
-                                  purge: purge) { (result, errors) in
+                                  purge: purge) { (result, errors, warnings) in
             pushResult = result
             pushErrors = errors
+            pushWarnings = warnings
             semaphore.signal()
         }
         
@@ -260,18 +264,94 @@ Control whether the keys of strings to be pushed should be hashed (true) or not
             spinner.stopAndClear()
         }
         
-        if !pushResult {
-            if containsMaxRetriesReachedError(pushErrors) {
-                logHandler.info("[prompt]Strings are queued for processing[end]")
+        for pushWarning in pushWarnings {
+            guard let warning = pushWarning as? TXCDSWarning else {
+                logHandler.warning("Generic warning encountered: \(pushWarning)",
+                                   trailingLine: true)
+                continue
             }
-            else {
-                logHandler.error("Error while pushing source strings to CDS")
-                throw CommandError.cdsPushFailure
+            switch warning {
+            case .duplicateSourceString(sourceString: let sourceString,
+                                        duplicate: let duplicate):
+                logHandler.warning("""
+Warning: Duplicate source string pair found:
+>> \(sourceString)
+<< \(duplicate)
+""", trailingLine: true)
+            case .emptyKey(SourceString: let sourceString):
+                logHandler.warning("""
+Warning: Empty key on source string:
+\(sourceString)
+""", trailingLine: true)
             }
         }
-        else {
+
+        for pushError in pushErrors {
+            guard let error = pushError as? TXCDSError else {
+                logHandler.error("Generic error encountered: \(pushError)",
+                                 trailingLine: true)
+                continue
+            }
+            switch error {
+            case .noDataToBeSent:
+                logHandler.error("Error encoding source strings",
+                                 trailingLine: true)
+
+            case .invalidCDSURL:
+                logHandler.error("Error: Invalid CDS host URL:",
+                                 trailingLine: true)
+
+            case .failedSerialization(let err):
+                logHandler.error("Error while serializing translations: \(err)",
+                                 trailingLine: true)
+
+            case .requestFailed(let err):
+                logHandler.error("Error pushing strings: \(err)",
+                                 trailingLine: true)
+
+            case .invalidHTTPResponse:
+                logHandler.error("Error pushing strings: Not a valid HTTP response",
+                                 trailingLine: true)
+
+            case .serverError(let statusCode):
+                logHandler.error("HTTP Status error while pushing strings: \(statusCode)",
+                                 trailingLine: true)
+
+            case .noData:
+                logHandler.error("Error: No data received while pushing strings",
+                                 trailingLine: true)
+
+            case .nonParsableResponse:
+                logHandler.error("Error while decoding CDS push response",
+                                 trailingLine: true)
+
+            case .failedJobRequest:
+                logHandler.error("Error: Fetch job status request failed",
+                                 trailingLine: true)
+
+            case .maxRetriesReached:
+                logHandler.info("[prompt]Strings are queued for processing[end]")
+
+            case .jobError(status: let status,
+                           code: let code,
+                           title: let title,
+                           detail: let detail,
+                           source: let source):
+                logHandler.error("""
+Error: \(title) (\(status) - \(code)):
+Detail: \(detail)
+Source: \(source)
+""", trailingLine: true)
+
+            default:
+                logHandler.error("Error while pushing source strings to CDS",
+                                 trailingLine: true)
+            }
+        }
+
+        if pushResult {
             logHandler.info("""
-[success]✓[end] [num]\(translations.count)[end][success] source strings pushed successfully[end]
+[success]✓ Source strings pushed successfully[end]
 """)
         }
     }
