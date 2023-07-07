@@ -68,3 +68,19 @@ argument of the push command.
 *February 23, 2023*
 
 - Introduces status filter option in pull command.
+
+## Transifex Command Line Tool 2.0.0
+
+*July 7, 2023*
+
+- `push` command now logs any warnings and errors generated during the
+processing and push of the source strings.
+- Source strings that only exist in files not supported by Transifex SDK are
+now ommited.
+- Extra options have been introduced for the `push` command:
+`--override-tags`, `--override-occurrences`, `--keep-translations`.
+- Push logic detects and reports warnings such as duplicate source string keys
+or empty source string keys.
+- The default value for the `hashKeys` option of the `push` command has been
+flipped, so by default the tool **does not** hash the keys of the provided
+source strings, respecting the original keys passed by the developer.
