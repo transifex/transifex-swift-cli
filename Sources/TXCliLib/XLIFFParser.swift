@@ -300,7 +300,37 @@ public class XLIFFParser: NSObject {
         
         return true
     }
-    
+
+    private static let EXCLUDE_FILENAMES = [
+        "InfoPlist.strings",
+        "Root.strings"
+    ]
+
+    /// Filters results by excluding translation units that their `files` array lists filenames that cannot be
+    /// handled by the Transifex SDK (`EXCLUDE_FILENAMES`).
+    ///
+    /// If the `files` array includes a filename that is not part of the above array, then that translation
+    /// unit is not filtered out.
+    ///
+    /// Ref: https://transifex.github.io/transifex-swift/#special-cases
+    ///
+    /// - Parameter results: The parser results
+    /// - Returns: Array of filtered results that do not contain translation units that are included in the
+    /// `SKIP_FILENAMES` files.
+    public static func filter(_ results: [TranslationUnit]) -> [TranslationUnit] {
+        return results.filter { translationUnit in
+            var excludedFilenameCount = 0
+            for file in translationUnit.files {
+                for excludeFilename in EXCLUDE_FILENAMES {
+                    if file.contains(excludeFilename) {
+                        excludedFilenameCount += 1
+                    }
+                }
+            }
+            return excludedFilenameCount != translationUnit.files.count
+        }
+    }
+
     /// Consolidates results based on their ID and combines their properties if needed.
     ///
     /// Call this method after parse() call was successful.

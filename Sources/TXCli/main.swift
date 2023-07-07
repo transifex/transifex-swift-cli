@@ -42,7 +42,7 @@ that can be bundled with the iOS application.
 The tool can be also used to force CDS cache invalidation so that the next pull
 command will fetch fresh translations from CDS.
 """,
-        version: "1.0.6",
+        version: "2.0.0",
         subcommands: [Push.self, Pull.self, Invalidate.self])
 }
 
@@ -86,15 +86,6 @@ or the path to the generated .xliff (e.g. ../en.xliff).
     private var project : String
     
     @Flag(name: .long, help: """
-If purge: true, then replace the entire resource content with the pushed content
-of this request.
-
-If purge: false (default), then append the source content of this request to the
-existing resource content.
-""")
-    private var purge: Bool = false
-    
-    @Flag(name: .long, help: """
 Whether to keep the temporary folder that contains the generated .xcloc or not.
 """)
     private var keepTempFolder: Bool = false
@@ -105,15 +96,53 @@ the CDS server.
 """)
     private var appendTags: [String] = []
     
-    @Flag(name: .long, help: "Do not push to CDS.")
-    private var dryRun: Bool = false
-    
     @Flag(name: .long, inversion: .prefixedEnableDisable,
           exclusivity: .exclusive, help: """
 Control whether the keys of strings to be pushed should be hashed (true) or not
 (false).
 """)
-    private var hashKeys: Bool = true
+    private var hashKeys: Bool = false
+
+    @Flag(name: .long, help: """
+If purge: true, then replace the entire resource content with the pushed content
+of this request.
+
+If purge: false (default), then append the source content of this request to the
+existing resource content.
+""")
+    private var purge: Bool = false
+
+    @Flag(name: .long, help: """
+If override-tags: true, then replace the existing string tags with the tags of
+this request.
+
+If override-tags: false (default), then append tags from source content to tags
+of existing strings instead of overwriting them.
+""")
+    private var overrideTags: Bool = false
+
+    @Flag(name: .long, help: """
+If override-occurrences: true, then replace the existing string occurrences with
+the occurrences of this request.
+
+If override-occurrences: false (default), then append occurrences from source
+content to occurrences of existing strings instead of overwriting them.
+""")
+    private var overrideOccurrences: Bool = false
+
+    @Flag(name: .long, help: """
+If keep-translations: true (default), then preserve translations on source
+content updates.
+
+If keep-translations: false, then delete translations on source string content
+updates.
+""")
+    private var keepTranslations: Bool = true
+
+    @Flag(name: .long, help: """
+Emulate a content push, without doing actual changes.
+""")
+    private var dryRun: Bool = false
 
     func run() throws {
         let logHandler = CliLogHandler()
@@ -184,9 +213,11 @@ Control whether the keys of strings to be pushed should be hashed (true) or not
             throw CommandError.xliffParsingFailure
         }
         
+        let filteredResults = XLIFFParser.filter(parser.results)
+
         var translations: [TXSourceString] = []
         
-        for result in XLIFFParser.consolidate(parser.results) {
+        for result in XLIFFParser.consolidate(filteredResults) {
             let key = hashKeys ? txGenerateKey(sourceString: result.id,
                                                context: nil) : result.id
             
@@ -219,13 +250,6 @@ Control whether the keys of strings to be pushed should be hashed (true) or not
 [high]Found[end] [num]\(translations.count)[end] [high]source strings[end]
 """)
         
-        guard dryRun == false else {
-            logHandler.warning("[warn]Dry run: no strings will be pushed to CDS")
-            
-            logHandler.verbose("Translations: \(translations.debugDescription)")
-            return
-        }
-
         logHandler.verbose("[high]Initializing TxNative...[end]")
         
         TXNative.initialize(locales: TXLocaleState(sourceLocale: sourceLocale),
@@ -246,11 +270,21 @@ Control whether the keys of strings to be pushed should be hashed (true) or not
         let semaphore = DispatchSemaphore(value: 0)
         var pushResult = false
         var pushErrors: [Error] = []
+        var pushWarnings: [Error] = []
         
+        let configuration = TXPushConfiguration(purge: purge,
+                                                overrideTags: overrideTags,
+                                                overrideOccurrences: overrideOccurrences,
+                                                keepTranslations: keepTranslations,
+                                                dryRun: dryRun)
+
+        logHandler.verbose("Push configuration: \(configuration.debugDescription)")
+
         TXNative.pushTranslations(translations,
-                                  purge: purge) { (result, errors) in
+                                  configuration: configuration) { (result, errors, warnings) in
             pushResult = result
             pushErrors = errors
+            pushWarnings = warnings
             semaphore.signal()
         }
         
@@ -260,18 +294,94 @@ Control whether the keys of strings to be pushed should be hashed (true) or not
             spinner.stopAndClear()
         }
         
-        if !pushResult {
-            if containsMaxRetriesReachedError(pushErrors) {
-                logHandler.info("[prompt]Strings are queued for processing[end]")
+        for pushWarning in pushWarnings {
+            guard let warning = pushWarning as? TXCDSWarning else {
+                logHandler.warning("Generic warning encountered: \(pushWarning)",
+                                   trailingLine: true)
+                continue
             }
-            else {
-                logHandler.error("Error while pushing source strings to CDS")
-                throw CommandError.cdsPushFailure
+            switch warning {
+            case .duplicateSourceString(sourceString: let sourceString,
+                                        duplicate: let duplicate):
+                logHandler.warning("""
+Warning: Duplicate source string pair found:
+>> \(sourceString)
+<< \(duplicate)
+""", trailingLine: true)
+            case .emptyKey(SourceString: let sourceString):
+                logHandler.warning("""
+Warning: Empty key on source string:
+\(sourceString)
+""", trailingLine: true)
             }
         }
-        else {
+
+        for pushError in pushErrors {
+            guard let error = pushError as? TXCDSError else {
+                logHandler.error("Generic error encountered: \(pushError)",
+                                 trailingLine: true)
+                continue
+            }
+            switch error {
+            case .noDataToBeSent:
+                logHandler.error("Error encoding source strings",
+                                 trailingLine: true)
+
+            case .invalidCDSURL:
+                logHandler.error("Error: Invalid CDS host URL:",
+                                 trailingLine: true)
+
+            case .failedSerialization(let err):
+                logHandler.error("Error while serializing translations: \(err)",
+                                 trailingLine: true)
+
+            case .requestFailed(let err):
+                logHandler.error("Error pushing strings: \(err)",
+                                 trailingLine: true)
+
+            case .invalidHTTPResponse:
+                logHandler.error("Error pushing strings: Not a valid HTTP response",
+                                 trailingLine: true)
+
+            case .serverError(let statusCode):
+                logHandler.error("HTTP Status error while pushing strings: \(statusCode)",
+                                 trailingLine: true)
+
+            case .noData:
+                logHandler.error("Error: No data received while pushing strings",
+                                 trailingLine: true)
+
+            case .nonParsableResponse:
+                logHandler.error("Error while decoding CDS push response",
+                                 trailingLine: true)
+
+            case .failedJobRequest:
+                logHandler.error("Error: Fetch job status request failed",
+                                 trailingLine: true)
+
+            case .maxRetriesReached:
+                logHandler.info("[prompt]Strings are queued for processing[end]")
+
+            case .jobError(status: let status,
+                           code: let code,
+                           title: let title,
+                           detail: let detail,
+                           source: let source):
+                logHandler.error("""
+Error: \(title) (\(status) - \(code)):
+Detail: \(detail)
+Source: \(source)
+""", trailingLine: true)
+
+            default:
+                logHandler.error("Error while pushing source strings to CDS",
+                                 trailingLine: true)
+            }
+        }
+
+        if pushResult {
             logHandler.info("""
-[success]✓[end] [num]\(translations.count)[end][success] source strings pushed successfully[end]
+[success]✓ Source strings pushed successfully[end]
 """)
         }
     }
