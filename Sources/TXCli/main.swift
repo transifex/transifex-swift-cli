@@ -101,7 +101,7 @@ the CDS server.
 Control whether the keys of strings to be pushed should be hashed (true) or not
 (false).
 """)
-    private var hashKeys: Bool = true
+    private var hashKeys: Bool = false
 
     @Flag(name: .long, help: """
 If purge: true, then replace the entire resource content with the pushed content
