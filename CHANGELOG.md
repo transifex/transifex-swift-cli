@@ -84,3 +84,11 @@ or empty source string keys.
 - The default value for the `hashKeys` option of the `push` command has been
 flipped, so by default the tool **does not** hash the keys of the provided
 source strings, respecting the original keys passed by the developer.
+
+## Transifex Command Line Tool 2.1.0
+
+*August 21, 2023*
+
+- Extra option for the `push` command has been introduced: `--excluded-files`
+that excludes the provided filenames from processing, filtering out any included
+strings.
