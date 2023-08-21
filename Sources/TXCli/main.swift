@@ -96,6 +96,12 @@ the CDS server.
 """)
     private var appendTags: [String] = []
     
+    @Option(name: .long, parsing: .upToNextOption, help: """
+An optional list of localizable files that the logic must exclude when
+processing the exported strings.
+""")
+    private var excludedFiles: [String] = []
+
     @Flag(name: .long, inversion: .prefixedEnableDisable,
           exclusivity: .exclusive, help: """
 Control whether the keys of strings to be pushed should be hashed (true) or not
@@ -213,7 +219,12 @@ Emulate a content push, without doing actual changes.
             throw CommandError.xliffParsingFailure
         }
         
-        let filteredResults = XLIFFParser.filter(parser.results)
+        var excludeFilenames = XLIFFParser.UNSUPPORTED_FILES
+        excludeFilenames.append(contentsOf: excludedFiles)
+
+        let filteredResults = XLIFFParser.filter(parser.results,
+                                                 excludeFilenames: excludedFiles,
+                                                 logHandler: logHandler)
 
         var translations: [TXSourceString] = []
         

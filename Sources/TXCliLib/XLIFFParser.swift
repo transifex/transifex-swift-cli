@@ -301,33 +301,45 @@ public class XLIFFParser: NSObject {
         return true
     }
 
-    private static let EXCLUDE_FILENAMES = [
+    /// List of string filenames that Transifex SDK does not support.
+    public static let UNSUPPORTED_FILES = [
         "InfoPlist.strings",
         "Root.strings"
     ]
 
-    /// Filters results by excluding translation units that their `files` array lists filenames that cannot be
-    /// handled by the Transifex SDK (`EXCLUDE_FILENAMES`).
+    /// Filters results by excluding translation units that their `files` array lists filenames that are included
+    /// in the provided `excludeFilenames` array.
     ///
-    /// If the `files` array includes a filename that is not part of the above array, then that translation
+    /// If the `files` array includes a filename that is not part of the provided array, then that translation
     /// unit is not filtered out.
     ///
     /// Ref: https://transifex.github.io/transifex-swift/#special-cases
     ///
-    /// - Parameter results: The parser results
+    /// - Parameter results: The parser results.
+    /// - Parameter excludeFilenames: List of filenames that their translation units must be
+    /// excluded.
+    /// - Parameter logHandler: Optional log handler for logging purposes.
     /// - Returns: Array of filtered results that do not contain translation units that are included in the
     /// `SKIP_FILENAMES` files.
-    public static func filter(_ results: [TranslationUnit]) -> [TranslationUnit] {
+    public static func filter(_ results: [TranslationUnit],
+                              excludeFilenames: [String],
+                              logHandler: TXLogHandler? = nil) -> [TranslationUnit] {
         return results.filter { translationUnit in
             var excludedFilenameCount = 0
             for file in translationUnit.files {
-                for excludeFilename in EXCLUDE_FILENAMES {
+                for excludeFilename in excludeFilenames {
                     if file.contains(excludeFilename) {
                         excludedFilenameCount += 1
                     }
                 }
             }
-            return excludedFilenameCount != translationUnit.files.count
+            let isIncluded = excludedFilenameCount != translationUnit.files.count
+            if let logHandler = logHandler, !isIncluded {
+                logHandler.verbose("""
+[prompt]Excluding \(translationUnit) due to --excluded-files argument.[end]
+""")
+            }
+            return isIncluded
         }
     }
 
