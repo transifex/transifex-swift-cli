@@ -78,6 +78,20 @@ command can be simplified to:
 
 `txios-cli push --project MyApp.xcodeproj`
 
+##### Excluding files
+
+With the `--excluded-files` option in the `push` command, an optional list of filenames can be excluded from processing.
+
+Developers can offer a comma separated list of filenames that must be filtered out by the CLI before the strings are pushed to CDS.
+
+Example:
+
+```
+txios-cli push ... --excluded-files ExcludedFile1.strings,ExcludedFile2.strings
+```
+
+> Note: If a string is included both in the excluded filenames and is also found in non-excluded filenames, it will be included in the push data.
+
 ##### Hashing keys on push
 
 By default, the `txios-cli` tool will hash the key of each source string that
