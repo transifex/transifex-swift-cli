@@ -462,6 +462,12 @@ This option can be used alongside the --with-tags-only option.
 """)
     private var withStatusOnly: String?
 
+    @Option(name: .long, help: """
+Provide a source locale if it is different than 'en'. Otherwise the logic will
+default to the 'en' source locale.
+""")
+    private var sourceLocale: String?
+
     func run() throws {
         let logHandler = CliLogHandler()
         logHandler.verbose = options.verbose
@@ -477,7 +483,7 @@ This option can be used alongside the --with-tags-only option.
         
         logHandler.info("[prompt]Initializing TxNative...[end]")
         
-        TXNative.initialize(locales: TXLocaleState(sourceLocale: nil,
+        TXNative.initialize(locales: TXLocaleState(sourceLocale: sourceLocale,
                                                    appLocales: translatedLocales),
                             token: transifexToken,
                             secret: nil,
