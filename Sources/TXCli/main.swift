@@ -223,7 +223,7 @@ Emulate a content push, without doing actual changes.
         excludeFilenames.append(contentsOf: excludedFiles)
 
         let filteredResults = XLIFFParser.filter(parser.results,
-                                                 excludeFilenames: excludedFiles,
+                                                 excludeFilenames: excludeFilenames,
                                                  logHandler: logHandler)
 
         var translations: [TXSourceString] = []
