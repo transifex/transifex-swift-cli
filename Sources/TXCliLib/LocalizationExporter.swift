@@ -26,7 +26,10 @@ public class LocalizationExporter {
     private static let LOCALIZED_CONTENTS_FOLDER_NAME = "Localized Contents"
     private static let XCLOC_EXTENSION = "xcloc"
     private static let XLIFF_EXTENSION = "xliff"
-    
+
+    private static let IOS_LANGUAGE_TAG_DELIMITER = "-"
+    private static let TRANSIFEX_LANGUAGE_TAG_DELIMITER = "_"
+
     private let logHandler: TXLogHandler?
     
     /// Initializes the exporter and generates a temp directory for this session where the generated .xcloc
@@ -45,7 +48,13 @@ public class LocalizationExporter {
             return nil
         }
 
-        self.sourceLocale = sourceLocale
+        /// Ensure that the exported XLOC and XLIFF containers will be accessible for the source locale,
+        /// as the iOS uses a hyphen for the language tag (e.g. en-GB) while Transifex uses an
+        /// underscore (e.g. en_GB).
+        let normalizedLocaleCode = sourceLocale.replacingOccurrences(of: Self.TRANSIFEX_LANGUAGE_TAG_DELIMITER,
+                                                                     with: Self.IOS_LANGUAGE_TAG_DELIMITER)
+
+        self.sourceLocale = normalizedLocaleCode
         self.project = project
         self.logHandler = logHandler
 

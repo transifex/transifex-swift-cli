@@ -42,7 +42,7 @@ that can be bundled with the iOS application.
 The tool can be also used to force CDS cache invalidation so that the next pull
 command will fetch fresh translations from CDS.
 """,
-        version: "2.1.0",
+        version: "2.1.1",
         subcommands: [Push.self, Pull.self, Invalidate.self])
 }
 
@@ -223,7 +223,7 @@ Emulate a content push, without doing actual changes.
         excludeFilenames.append(contentsOf: excludedFiles)
 
         let filteredResults = XLIFFParser.filter(parser.results,
-                                                 excludeFilenames: excludedFiles,
+                                                 excludeFilenames: excludeFilenames,
                                                  logHandler: logHandler)
 
         var translations: [TXSourceString] = []
@@ -462,6 +462,12 @@ This option can be used alongside the --with-tags-only option.
 """)
     private var withStatusOnly: String?
 
+    @Option(name: .long, help: """
+Provide a source locale if it is different than 'en'. Otherwise the logic will
+default to the 'en' source locale.
+""")
+    private var sourceLocale: String?
+
     func run() throws {
         let logHandler = CliLogHandler()
         logHandler.verbose = options.verbose
@@ -477,7 +483,7 @@ This option can be used alongside the --with-tags-only option.
         
         logHandler.info("[prompt]Initializing TxNative...[end]")
         
-        TXNative.initialize(locales: TXLocaleState(sourceLocale: nil,
+        TXNative.initialize(locales: TXLocaleState(sourceLocale: sourceLocale,
                                                    appLocales: translatedLocales),
                             token: transifexToken,
                             secret: nil,
