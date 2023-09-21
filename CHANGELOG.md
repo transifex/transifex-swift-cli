@@ -92,3 +92,19 @@ source strings, respecting the original keys passed by the developer.
 - Extra option for the `push` command has been introduced: `--excluded-files`
 that excludes the provided filenames from processing, filtering out any included
 strings.
+
+## Transifex Command Line Tool 2.1.1
+
+*September 21, 2023*
+
+- Adds `--source-locale` option to `pull` command so that developers can specify
+the source locale, if it's different than `en`. If not provided, the `pull`
+logic default to the `en` source locale.
+- Fixes an issue on `push` command where the unsupported SDK files were not
+being excluded by the localization parsing logic.
+- Addresses language tag discrepancy: In the `push` command, the
+`--source-locale` option refers to the source locale of the Xcode project and
+the format used by Xcode and iOS is different than the format used by Transifex
+(e.g `en-US` instead of `en_US`). For that reason the source locale string is
+now normalized before being passed to the exporter logic so that the latter can
+always be able to export the source locale from the Xcode project.
