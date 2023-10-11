@@ -137,7 +137,7 @@ final class XLIFFParserTests: XCTestCase {
         XCTAssertTrue(pluralizationRules?.count == 3)
         
         let icuRule = results.first!.generateICURuleIfPossible()
-        let expectedIcuRule = "{cnt, plural, one { %d minute } other { %d minutes }}"
+        let expectedIcuRule = "{cnt, plural, one {%d minute} other {%d minutes}}"
         
         XCTAssertEqual(icuRule, expectedIcuRule)
     }
@@ -212,7 +212,7 @@ final class XLIFFParserTests: XCTestCase {
         XCTAssertTrue(result.pluralizationRules!.count == 3)
 
         let icuRule = result.generateICURuleIfPossible()
-        let expectedIcuRule = "{cnt, plural, one { %d minute } other { %d minutes }}"
+        let expectedIcuRule = "{cnt, plural, one {%d minute} other {%d minutes}}"
         
         XCTAssertEqual(icuRule, expectedIcuRule)
     }

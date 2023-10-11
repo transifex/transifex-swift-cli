@@ -163,7 +163,7 @@ extension TranslationUnit {
                 continue
             }
             
-            icuRules.append("\(pluralRule) { \(target) }")
+            icuRules.append("\(pluralRule) {\(target)}")
         }
         
         guard icuRules.count > 0 else {
