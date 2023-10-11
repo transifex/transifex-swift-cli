@@ -108,3 +108,10 @@ the format used by Xcode and iOS is different than the format used by Transifex
 (e.g `en-US` instead of `en_US`). For that reason the source locale string is
 now normalized before being passed to the exporter logic so that the latter can
 always be able to export the source locale from the Xcode project.
+
+## Transifex Command Line Tool 2.1.2
+
+*October 11, 2023*
+
+- Fixes the issue where leading and trailing white space was being added around
+the extracted ICU pluralization rules.
