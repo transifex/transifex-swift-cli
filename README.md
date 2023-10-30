@@ -124,6 +124,19 @@ Pushing translations to CDS: [
 ]...
 ```
 
+##### Specifying a base SDK
+
+The `txios-cli` tool calls the `xcodebuild` process to export the localizations
+using the `-exportLocalizations` option. When that happens, the system automatically
+picks the base SDK to be used (`iphoneos`, `macosx` etc).
+
+There have been cases where the base SDK is not picked up correctly by the `xcodebuild`
+process and a specific base SDK needs to be provided externally.
+
+If the `push` command fails with errors like "no such module 'UIKit'", the developer
+can manually specify the base SDK to be used using the `--base-sdk` option of the `push`
+command. For example, for iOS applications the option can be set to `--base-sdk iphoneos`.
+
 ##### Pushing pluralizations limitations
 
 Currently (version 0.1.0) pluralization is supported but only for cases where one variable is

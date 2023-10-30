@@ -80,6 +80,12 @@ You can either provide the Transifex token and secret via enviroment variables
     private var sourceLocale: String = "en"
 
     @Option(name: .long, help: """
+The name or path of the base SDK to be used when exporting project's localizations
+(e.g. iphoneos, macosx, iphoneos17.0, a path to the base SDK etc).
+""")
+    private var baseSDK: String?
+
+    @Option(name: .long, help: """
 Either the path to the project's .xcodeproj or .xcworkspace (e.g. ../MyProject/myproject.xcodeproj),
 or the path to the generated .xliff (e.g. ../en.xliff).
 """)
@@ -188,6 +194,7 @@ Emulate a content push, without doing actual changes.
         else {
             guard let locExporter = LocalizationExporter(sourceLocale: sourceLocale,
                                                          project: projectURL,
+                                                         baseSDK: baseSDK,
                                                          logHandler: logHandler) else {
                 logHandler.error("Failed to initialize localization exporter")
                 throw CommandError.exporterInitializationFailure

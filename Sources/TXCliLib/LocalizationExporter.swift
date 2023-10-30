@@ -21,6 +21,9 @@ public class LocalizationExporter {
     /// The temporary export file URL that will be used to store the exported localizations.
     private let exportURL: URL
     
+    /// The base SDK to be used.
+    private let baseSDK: String?
+
     private static let TEMP_FOLDER_PREFIX = "txios-cli-"
     
     private static let LOCALIZED_CONTENTS_FOLDER_NAME = "Localized Contents"
@@ -38,9 +41,11 @@ public class LocalizationExporter {
     /// - Parameters:
     ///   - sourceLocale: The source locale for the base localization
     ///   - project: The path to the project name (can be a relative path)
+    ///   - baseSDK: The base sdk to be used (optional)
     ///   - logHandler: Optional log handler
     public init?(sourceLocale: String,
                  project: URL,
+                 baseSDK: String?,
                  logHandler: TXLogHandler? = nil) {
         guard project.pathExtension == "xcodeproj"
                 || project.pathExtension == "xcworkspace" else {
@@ -57,6 +62,7 @@ public class LocalizationExporter {
         self.sourceLocale = normalizedLocaleCode
         self.project = project
         self.logHandler = logHandler
+        self.baseSDK = baseSDK
 
         let uuidString = UUID().uuidString
         let tempExportURLPath = LocalizationExporter.TEMP_FOLDER_PREFIX + uuidString
@@ -122,6 +128,9 @@ public class LocalizationExporter {
         process.arguments = [ "-exportLocalizations",
                               "-localizationPath", exportURL.path,
                               isProject ? "-project" : "-workspace", project.path]
+        if let baseSDK = baseSDK {
+            process.arguments?.append(contentsOf: [ "-sdk", baseSDK])
+        }
         process.standardOutput = outputPipe
         process.standardError = errorPipe
         
