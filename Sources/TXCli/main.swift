@@ -42,7 +42,7 @@ that can be bundled with the iOS application.
 The tool can be also used to force CDS cache invalidation so that the next pull
 command will fetch fresh translations from CDS.
 """,
-        version: "2.1.3",
+        version: "2.1.4",
         subcommands: [Push.self, Pull.self, Invalidate.self])
 }
 
@@ -143,13 +143,13 @@ content to occurrences of existing strings instead of overwriting them.
     private var overrideOccurrences: Bool = false
 
     @Flag(name: .long, help: """
-If keep-translations: true (default), then preserve translations on source
-content updates.
-
-If keep-translations: false, then delete translations on source string content
+If delete-translations: true, then delete translations on source string content
 updates.
+
+If delete-translations: false (default), then preserve translations on source
+content updates.
 """)
-    private var keepTranslations: Bool = true
+    private var deleteTranslations: Bool = false
 
     @Flag(name: .long, help: """
 Emulate a content push, without doing actual changes.
@@ -293,7 +293,7 @@ Emulate a content push, without doing actual changes.
         let configuration = TXPushConfiguration(purge: purge,
                                                 overrideTags: overrideTags,
                                                 overrideOccurrences: overrideOccurrences,
-                                                keepTranslations: keepTranslations,
+                                                keepTranslations: !deleteTranslations,
                                                 dryRun: dryRun)
 
         logHandler.verbose("Push configuration: \(configuration.debugDescription)")
