@@ -143,13 +143,13 @@ content to occurrences of existing strings instead of overwriting them.
     private var overrideOccurrences: Bool = false
 
     @Flag(name: .long, help: """
-If keep-translations: true (default), then preserve translations on source
-content updates.
-
-If keep-translations: false, then delete translations on source string content
+If delete-translations: true, then delete translations on source string content
 updates.
+
+If delete-translations: false (default), then preserve translations on source
+content updates.
 """)
-    private var keepTranslations: Bool = true
+    private var deleteTranslations: Bool = false
 
     @Flag(name: .long, help: """
 Emulate a content push, without doing actual changes.
@@ -293,7 +293,7 @@ Emulate a content push, without doing actual changes.
         let configuration = TXPushConfiguration(purge: purge,
                                                 overrideTags: overrideTags,
                                                 overrideOccurrences: overrideOccurrences,
-                                                keepTranslations: keepTranslations,
+                                                keepTranslations: !deleteTranslations,
                                                 dryRun: dryRun)
 
         logHandler.verbose("Push configuration: \(configuration.debugDescription)")
