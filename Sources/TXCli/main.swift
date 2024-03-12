@@ -247,10 +247,13 @@ Emulate a content push, without doing actual changes.
             // ICU format and use that as a source string
             switch result.generateICURuleIfPossible() {
             case .success((let icuRule, let icuRuleType)):
-                // Only support plural rule type for now
-                if icuRuleType == .Plural {
-                    sourceString = icuRule
+                if icuRuleType == TranslationUnit.ICURuleType.Other {
+                    logHandler.error("Error: ICU rule type could not be detected.")
+                    // Do not add a translation unit in case of a non-detected
+                    // ICU rule type.
+                    continue
                 }
+                sourceString = icuRule
             case .failure(let error):
                 switch error {
                 case .noRules:

@@ -206,6 +206,41 @@ final class XLIFFParserTests: XCTestCase {
         <target>%d minutes</target>
         <note/>
       </trans-unit>
+      <trans-unit id="/old_substitution:dict/NSStringLocalizedFormatKey:dict/:string" xml:space="preserve">
+        <source>%#@num_people_in_room@ in %#@room@</source>
+        <target>%#@num_people_in_room@ in %#@room@</target>
+        <note/>
+      </trans-unit>
+      <trans-unit id="/old_substitution:dict/num_people_in_room:dict/one:dict/:string" xml:space="preserve">
+        <source>Only %d person</source>
+        <target>Only %d person</target>
+        <note/>
+      </trans-unit>
+      <trans-unit id="/old_substitution:dict/num_people_in_room:dict/other:dict/:string" xml:space="preserve">
+        <source>Some people</source>
+        <target>Some people</target>
+        <note/>
+      </trans-unit>
+      <trans-unit id="/old_substitution:dict/num_people_in_room:dict/zero:dict/:string" xml:space="preserve">
+        <source>No people</source>
+        <target>No people</target>
+        <note/>
+      </trans-unit>
+      <trans-unit id="/old_substitution:dict/room:dict/one:dict/:string" xml:space="preserve">
+        <source>%d room</source>
+        <target>%d room</target>
+        <note/>
+      </trans-unit>
+      <trans-unit id="/old_substitution:dict/room:dict/other:dict/:string" xml:space="preserve">
+        <source>%d rooms</source>
+        <target>%d rooms</target>
+        <note/>
+      </trans-unit>
+      <trans-unit id="/old_substitution:dict/room:dict/zero:dict/:string" xml:space="preserve">
+        <source>no room</source>
+        <target>no room</target>
+        <note/>
+      </trans-unit>
     </body>
   </file>
 </xliff>
@@ -224,16 +259,217 @@ final class XLIFFParserTests: XCTestCase {
 
         let results = xliffParser!.results
 
+        XCTAssertTrue(results.count == 2)
+
+        do {
+            let result = results[0]
+            XCTAssertEqual(result.pluralizationRules.count, 7)
+            let icuRule = try result.generateICURuleIfPossible().get()
+            let expectedIcuRule = "<cds-root><cds-unit id=\"substitutions\">%#@num_people_in_room@ in %#@room@</cds-unit><cds-unit id=\"substitutions.num_people_in_room.plural.one\">Only %d person</cds-unit><cds-unit id=\"substitutions.num_people_in_room.plural.other\">Some people</cds-unit><cds-unit id=\"substitutions.num_people_in_room.plural.zero\">No people</cds-unit><cds-unit id=\"substitutions.room.plural.one\">%d room</cds-unit><cds-unit id=\"substitutions.room.plural.other\">%d rooms</cds-unit><cds-unit id=\"substitutions.room.plural.zero\">no room</cds-unit></cds-root>"
+            XCTAssertEqual(icuRule.0, expectedIcuRule)
+            XCTAssertEqual(icuRule.1, .Substitutions)
+        }
+
+        do {
+            let result = results[1]
+            XCTAssertEqual(result.pluralizationRules.count, 3)
+            
+            let icuRule = try result.generateICURuleIfPossible().get()
+            let expectedIcuRule = "{cnt, plural, one {%d minute} other {%d minutes}}"
+            
+            XCTAssertEqual(icuRule.0, expectedIcuRule)
+            XCTAssertEqual(icuRule.1, .Plural)
+        }
+    }
+
+    func testXLIFFParserWithXCStringsSubstitutions() throws {
+        let fileURL = tempXLIFFFileURL()
+        let sampleXLIFF = """
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
+  <file original="Localizable.stringsdict" source-language="en" target-language="en" datatype="plaintext">
+    <header>
+      <tool tool-id="com.apple.dt.xcode" tool-name="Xcode" tool-version="12.3" build-num="12C33"/>
+    </header>
+    <body>
+      <trans-unit id="substitutions_test" xml:space="preserve">
+        <source>Found %1$#@arg1@ having %2$#@arg2@</source>
+        <target state="translated">Found %1$#@arg1@ having %2$#@arg2@</target>
+        <note/>
+      </trans-unit>
+      <trans-unit id="substitutions_test|==|substitutions.arg1.plural.one" xml:space="preserve">
+        <source>%1$ld user</source>
+        <target state="translated">%1$ld user</target>
+        <note/>
+      </trans-unit>
+      <trans-unit id="substitutions_test|==|substitutions.arg1.plural.other" xml:space="preserve">
+        <source>%1$ld users</source>
+        <target state="translated">%1$ld users</target>
+        <note/>
+      </trans-unit>
+      <trans-unit id="substitutions_test|==|substitutions.arg2.plural.one" xml:space="preserve">
+        <source>%2$ld device</source>
+        <target state="translated">%2$ld device</target>
+        <note/>
+      </trans-unit>
+      <trans-unit id="substitutions_test|==|substitutions.arg2.plural.other" xml:space="preserve">
+        <source>%2$ld devices</source>
+        <target state="translated">%2$ld devices</target>
+        <note/>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>
+"""
+        do {
+            try sampleXLIFF.write(to: fileURL, atomically: true, encoding: .utf8)
+        }
+        catch { }
+
+        let xliffParser = XLIFFParser(fileURL: fileURL)
+        XCTAssertNotNil(xliffParser, "Failed to initialize parser")
+
+        let parsed = xliffParser!.parse()
+
+        XCTAssertTrue(parsed)
+
+        let results = xliffParser!.results
+
         XCTAssertTrue(results.count == 1)
 
-        XCTAssertTrue(results.first!.pluralizationRules.count == 3)
-        
+        XCTAssertEqual(results.first!.pluralizationRules.count, 4)
+
         let icuRule = try results.first!.generateICURuleIfPossible().get()
 
-        let expectedIcuRule = "{cnt, plural, one {%d minute} other {%d minutes}}"
+        let expectedIcuRule = "<cds-root><cds-unit id=\"substitutions\">Found %1$#@arg1@ having %2$#@arg2@</cds-unit><cds-unit id=\"substitutions.arg1.plural.one\">%1$ld user</cds-unit><cds-unit id=\"substitutions.arg1.plural.other\">%1$ld users</cds-unit><cds-unit id=\"substitutions.arg2.plural.one\">%2$ld device</cds-unit><cds-unit id=\"substitutions.arg2.plural.other\">%2$ld devices</cds-unit></cds-root>"
 
         XCTAssertEqual(icuRule.0, expectedIcuRule)
-        XCTAssertEqual(icuRule.1, .Plural)
+        XCTAssertEqual(icuRule.1, .Substitutions)
+    }
+
+    func testXLIFFParserWithXCStringsDevices() throws {
+        let fileURL = tempXLIFFFileURL()
+        let sampleXLIFF = """
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
+  <file original="Localizable.xcstrings" source-language="en" target-language="en" datatype="plaintext">
+    <header>
+      <tool tool-id="com.apple.dt.xcode" tool-name="Xcode" tool-version="12.3" build-num="12C33"/>
+    </header>
+    <body>
+      <trans-unit id="device|==|device.applevision" xml:space="preserve">
+        <source>This is Apple Vision</source>
+        <target state="translated">This is Apple Vision</target>
+        <note/>
+      </trans-unit>
+      <trans-unit id="device|==|device.applewatch" xml:space="preserve">
+        <source>This is an Apple Watch</source>
+        <target state="translated">This is an Apple Watch</target>
+        <note/>
+      </trans-unit>
+      <trans-unit id="device|==|device.iphone" xml:space="preserve">
+        <source>This is an iPhone</source>
+        <target state="translated">This is an iPhone</target>
+        <note/>
+      </trans-unit>
+      <trans-unit id="device|==|device.mac" xml:space="preserve">
+        <source>This is a Mac</source>
+        <target state="translated">This is a Mac</target>
+        <note/>
+      </trans-unit>
+      <trans-unit id="device|==|device.other" xml:space="preserve">
+        <source>This is a device</source>
+        <target state="translated">This is a device</target>
+        <note/>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>
+"""
+        do {
+            try sampleXLIFF.write(to: fileURL, atomically: true, encoding: .utf8)
+        }
+        catch { }
+
+        let xliffParser = XLIFFParser(fileURL: fileURL)
+        XCTAssertNotNil(xliffParser, "Failed to initialize parser")
+
+        let parsed = xliffParser!.parse()
+
+        XCTAssertTrue(parsed)
+
+        let results = xliffParser!.results
+
+        XCTAssertTrue(results.count == 1)
+
+        XCTAssertEqual(results.first!.pluralizationRules.count, 5)
+
+        let icuRule = try results.first!.generateICURuleIfPossible().get()
+
+        let expectedIcuRule = "<cds-root><cds-unit id=\"device.applevision\">This is Apple Vision</cds-unit><cds-unit id=\"device.applewatch\">This is an Apple Watch</cds-unit><cds-unit id=\"device.iphone\">This is an iPhone</cds-unit><cds-unit id=\"device.mac\">This is a Mac</cds-unit><cds-unit id=\"device.other\">This is a device</cds-unit></cds-root>"
+
+        XCTAssertEqual(icuRule.0, expectedIcuRule)
+        XCTAssertEqual(icuRule.1, .Device)
+    }
+
+    func testXLIFFParserWithXCStringsSpecial() throws {
+        let fileURL = tempXLIFFFileURL()
+        let sampleXLIFF = """
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
+  <file original="Localizable.xcstrings" source-language="en" target-language="en" datatype="plaintext">
+    <header>
+      <tool tool-id="com.apple.dt.xcode" tool-name="Xcode" tool-version="12.3" build-num="12C33"/>
+    </header>
+    <body>
+    <trans-unit id="weird_key|==|device.iphone" xml:space="preserve">
+      <source>Device has %1$#@arg1_iphone@ in %2$ld folders</source>
+      <target state="translated">Device has %1$#@arg1_iphone@ in %2$ld folders</target>
+      <note/>
+    </trans-unit>
+    <trans-unit id="weird_key|==|device.other" xml:space="preserve">
+      <source>Device has %ld users in %ld folders</source>
+      <target state="translated">Device has %ld users in %ld folders</target>
+      <note/>
+    </trans-unit>
+    <trans-unit id="weird_key|==|substitutions.arg1_iphone.plural.one" xml:space="preserve">
+      <source>%ld user</source>
+      <target state="translated">%ld user</target>
+      <note/>
+    </trans-unit>
+    <trans-unit id="weird_key|==|substitutions.arg1_iphone.plural.other" xml:space="preserve">
+      <source>%ld users</source>
+      <target state="translated">%ld users</target>
+      <note/>
+    </trans-unit>
+    </body>
+  </file>
+</xliff>
+"""
+        do {
+            try sampleXLIFF.write(to: fileURL, atomically: true, encoding: .utf8)
+        }
+        catch { }
+
+        let xliffParser = XLIFFParser(fileURL: fileURL)
+        XCTAssertNotNil(xliffParser, "Failed to initialize parser")
+
+        let parsed = xliffParser!.parse()
+
+        XCTAssertTrue(parsed)
+
+        let results = xliffParser!.results
+
+        XCTAssertTrue(results.count == 1)
+
+        XCTAssertEqual(results.first!.pluralizationRules.count, 4)
+
+        let icuRule = try results.first!.generateICURuleIfPossible().get()
+
+        let expectedIcuRule = "<cds-root><cds-unit id=\"device.iphone\">Device has %1$#@arg1_iphone@ in %2$ld folders</cds-unit><cds-unit id=\"device.other\">Device has %ld users in %ld folders</cds-unit><cds-unit id=\"substitutions.arg1_iphone.plural.one\">%ld user</cds-unit><cds-unit id=\"substitutions.arg1_iphone.plural.other\">%ld users</cds-unit></cds-root>"
+
+        XCTAssertEqual(icuRule.0, expectedIcuRule)
+        XCTAssertEqual(icuRule.1, .Device)
     }
 
     func testXLIFFResultConsolidation() throws {
@@ -355,7 +591,11 @@ final class XLIFFParserTests: XCTestCase {
     
     static var allTests = [
         ("testXLIFFParser", testXLIFFParser),
+        ("testXLIFFParserWithXCStrings", testXLIFFParserWithXCStrings),
         ("testXLIFFParserWithStringsDict", testXLIFFParserWithStringsDict),
+        ("testXLIFFParserWithXCStringsSubstitutions", testXLIFFParserWithXCStringsSubstitutions),
+        ("testXLIFFParserWithXCStringsDevices", testXLIFFParserWithXCStringsDevices),
+        ("testXLIFFParserWithXCStringsSpecial", testXLIFFParserWithXCStringsSpecial),
         ("testXLIFFResultConsolidation", testXLIFFResultConsolidation),
         ("testXLIFFParserWithQuotes", testXLIFFParserWithQuotes),
     ]

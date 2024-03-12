@@ -207,9 +207,6 @@ extension TranslationUnit: Equatable {
 }
 
 extension TranslationUnit {
-    private static let LOCALIZED_FORMAT_KEY_PREFIX = "%#@"
-    private static let LOCALIZED_FORMAT_KEY_SUFFIX:Character = "@"
-
     /// Tags used by Apple's .xcstrings format
     private static let XCSTRINGS_PLURAL_RULE_PREFIX = "plural"
     private static let XCSTRINGS_DEVICE_RULE_PREFIX = "device"
@@ -217,13 +214,13 @@ extension TranslationUnit {
 
     /// The types of the generated ICU rule by the `generateICURuleIfPossible` method.
     public enum ICURuleType {
-        // Pluralization
+        // Pluralization (Simple plural rule, supported by CDS in ICU format)
         case Plural
-        // Vary by device
+        // Vary by device (Converted to XML for CDS)
         case Device
-        // Substitution (multiple variables)
+        // Substitution (multiple variables) (Converted to XML for CDS)
         case Substitutions
-        // Something unexpected / not yet supported
+        // Unexpected/empty rule encountered
         case Other
     }
     
@@ -255,80 +252,164 @@ extension TranslationUnit {
     }
 
     /// If the current `TranslationUnit` contains a number of `PluralizationRule` objects in its
-    /// property, then the method attempts to generate an ICU rule out of them that can be pushed to CDS.
+    /// property, then the method attempts to generate an ICU rule out of them that can be pushed to CDS
+    /// either as a single ICU rule or as an intermediate XML structure.
     ///
     /// - Returns: The ICU pluralization rule if its generation is possible, nil otherwise.
     public func generateICURuleIfPossible() -> Result<(String, ICURuleType), ICUError> {
         guard pluralizationRules.count > 0 else {
             return .failure(.noRules)
         }
-        
-        var icuRules : [String] = []
 
-        let activeStringsSourceType = pluralizationRules.map { $0.stringsSourceType }.first
-
-        // For the legacy .stringsdict format, require the localized format key
-        // to have the %#@[KEY]@ format. Otherwise do not process it.
-        // As per documentation:
-        // > If the formatted string contains multiple variables, enter a separate subdictionary for each variable.
-        // Ref: https://developer.apple.com/documentation/xcode/localizing-strings-that-contain-plurals
-        // So for example, the following is correct:
-        //
-        // <trans-unit id="/devices.%lu-device(s):dict/NSStringLocalizedFormatKey:dict/:string" xml:space="preserve">
-        //   <source>%#@lu_devices@</source>
-        //   <target>%#@lu_devices@</target>
-        //   <note/>
-        // </trans-unit>
-        // <trans-unit id="/devices.%lu-device(s):dict/lu_devices:dict/one:dict/:string" xml:space="preserve">
-        //   <source>Message is sent to %lu device.</source>
-        //   <target>Message is sent to %lu device.</target>
-        //   <note/>
-        // </trans-unit>
-        // <trans-unit id="/devices.%lu-device(s):dict/lu_devices:dict/other:dict/:string" xml:space="preserve">
-        //   <source>Message is sent to %lu devices.</source>
-        //   <target>Message is sent to %lu devices.</target>
-        //   <note/>
-        // </trans-unit>
-        //
-        // while this is wrong:
-        //
-        // <trans-unit id="/devices.%lu-device(s):dict/NSStringLocalizedFormatKey:dict/:string" xml:space="preserve">
-        //   <source>Message is sent to %#@lu_devices@.</source>
-        //   <target>Message is sent to %#@lu_devices@.</target>
-        //   <note/>
-        // </trans-unit>
-        // <trans-unit id="/devices.%lu-device(s):dict/lu_devices:dict/one:dict/:string" xml:space="preserve">
-        //   <source>%lu device</source>
-        //   <target>%lu device</target>
-        //   <note/>
-        // </trans-unit>
-        // <trans-unit id="/devices.%lu-device(s):dict/lu_devices:dict/other:dict/:string" xml:space="preserve">
-        //   <source>%lu devices</source>
-        //   <target>%lu devices</target>
-        //   <note/>
-        // </trans-unit>
-        if activeStringsSourceType == .StringsDict,
-           let target = pluralizationRules.filter({ $0.containsLocalizedFormatKey}).first?.target,
-           !(target.starts(with: Self.LOCALIZED_FORMAT_KEY_PREFIX) && target.last == Self.LOCALIZED_FORMAT_KEY_SUFFIX) {
-            return .failure(.malformedPluralizedFormat(target))
+        guard let activeStringsSourceType = pluralizationRules.map({ $0.stringsSourceType }).first else {
+            return .failure(.noRules)
         }
 
-        var isICUFriendly = false
+        var icuRuleType: ICURuleType = .Other
 
         if activeStringsSourceType == .StringsDict {
-            isICUFriendly = true
-        }
-        else if let pluralRule = pluralizationRules.first?.pluralRule,
-                pluralRule.starts(with: "\(Self.XCSTRINGS_PLURAL_RULE_PREFIX).") {
-            isICUFriendly = true
-        }
-
-        if isICUFriendly {
-            for pluralizationRule in pluralizationRules {
-                if pluralizationRule.containsLocalizedFormatKey {
-                    continue
+            // For the legacy .stringsdict format, if the localized format key
+            // contains more than two tokens, then it means that it contains
+            // substitutions. In this case we want to convert it to XML just
+            // like we do with .xcstrings substitutions.
+            //
+            // As per documentation:
+            // > If the formatted string contains multiple variables, enter a
+            // > separate subdictionary for each variable.
+            //
+            // Ref: https://developer.apple.com/documentation/xcode/localizing-strings-that-contain-plurals
+            if let target = pluralizationRules.filter({ $0.containsLocalizedFormatKey}).first?.target {
+                let tokenCount = PluralUtils.extractTokens(from: target).count
+                if tokenCount > 1 {
+                    icuRuleType = .Substitutions
                 }
+                else if tokenCount == 1 {
+                    icuRuleType = .Plural
+                }
+            }
+        }
+        else {
+            // Simple plural .xcstrings rules can be converted to a single ICU
+            // rule
+            if let pluralRule = pluralizationRules.first?.pluralRule,
+               pluralRule.starts(with: "\(Self.XCSTRINGS_PLURAL_RULE_PREFIX).") {
+                icuRuleType = .Plural
+            }
+            else {
+                if let rule = pluralizationRules.first?.pluralRule?.components(separatedBy: ".").first {
+                    switch rule {
+                    case Self.XCSTRINGS_DEVICE_RULE_PREFIX:
+                        icuRuleType = .Device
+                    case Self.XCSTRINGS_SUBSTITUTIONS_RULE_PREFIX:
+                        icuRuleType = .Substitutions
+                    default:
+                        icuRuleType = .Other
+                    }
+                }
+            }
+        }
 
+        guard icuRuleType != .Other else {
+            return .failure(.notSupported(.Other))
+        }
+
+        var cdsRule: String? = nil
+
+        if icuRuleType == .Plural {
+            // Single ICU rules are supported by CDS, so convert it and send it
+            // like that.
+            cdsRule = generateSingleICURule(pluralizationRules)
+        }
+        else {
+            // Otherwise convert all the plural rules to XML so that the CDS web
+            // UI can render them and then process them in the SDK when fetched.
+            cdsRule = generateXMLRule(pluralizationRules,
+                                      type: activeStringsSourceType)
+        }
+
+        guard let cdsRule = cdsRule else {
+            return .failure(.emptyRule)
+        }
+
+        return .success((cdsRule, icuRuleType))
+    }
+
+    /// For simple plural variations that just contain one plural rule which covers the whole phrase, we
+    /// generate the ICU rule in the format that is accepted by CDS.
+    ///
+    /// - Parameter pluralizationRules: The pluralization rules that make up the plural variation
+    /// - Returns: The generated ICU rule as a String, nil in case of an error (if no pluralization rules
+    /// could be processed).
+    private func generateSingleICURule(_ pluralizationRules: [PluralizationRule]) -> String? {
+        var icuRules : [String] = []
+
+        for pluralizationRule in pluralizationRules {
+            if pluralizationRule.containsLocalizedFormatKey {
+                continue
+            }
+
+            guard let pluralRule = pluralizationRule.pluralRule else {
+                continue
+            }
+
+            guard let target = pluralizationRule.target else {
+                continue
+            }
+
+            let normalizedRule = pluralRule.replacingOccurrences(of: "\(Self.XCSTRINGS_PLURAL_RULE_PREFIX).",
+                                                                 with: "")
+            icuRules.append("\(normalizedRule) {\(target)}")
+        }
+
+        guard icuRules.count > 0 else {
+            return nil
+        }
+
+        return "{cnt, plural, \(icuRules.joined(separator: " "))}"
+    }
+
+    /// For any complex variations (device, multiple plurals, tokens and their combinations), we generate
+    /// an intermediate XML structure that will be rendered in the Transifex web interface accordingly and
+    /// then processed by the SDK when pulled.
+    ///
+    /// - Parameters:
+    ///   - pluralizationRules: The pluralization rules that make up the complex variation.
+    ///   - type: The type governing the pluralization rules
+    /// - Returns: The generated XML structure as a String, nil in case of an error (if no XML children
+    /// could be generated).
+    private func generateXMLRule(_ pluralizationRules: [PluralizationRule],
+                                 type: PluralizationRule.StringsSourceType) -> String? {
+        switch type {
+        case .XCStrings:
+            let root = XMLElement(name: TXNative.CDS_XML_ROOT_TAG_NAME)
+
+            // Used for substitutions where the first trans-unit contains the
+            // phrase.
+            // e.g.
+            // ```
+            // <trans-unit id="substitutions_key" xml:space="preserve">
+            //   <source>Found %1$#@arg1@ having %2$#@arg2@</source>
+            //   <target state="translated">Found %1$#@arg1@ having %2$#@arg2@</target>
+            //   <note/>
+            // </trans-unit>
+            // <trans-unit id="substitutions_key|==|substitutions.arg1.plural.one" xml:space="preserve">
+            //   <source>%1$ld user</source>
+            //   <target state="translated">%1$ld user</target>
+            //   <note/>
+            // </trans-unit>
+            // ...
+            // ```
+            if target != id {
+                if let attribute = XMLNode.attribute(withName: TXNative.CDS_XML_ID_ATTRIBUTE,
+                                                     stringValue: Self.XCSTRINGS_SUBSTITUTIONS_RULE_PREFIX) as? XMLNode {
+                    let xmlElement = XMLElement(name: TXNative.CDS_XML_TAG_NAME,
+                                                stringValue: target)
+                    xmlElement.addAttribute(attribute)
+                    root.addChild(xmlElement)
+                }
+            }
+            
+            for pluralizationRule in pluralizationRules {
                 guard let pluralRule = pluralizationRule.pluralRule else {
                     continue
                 }
@@ -337,32 +418,60 @@ extension TranslationUnit {
                     continue
                 }
 
-                let normalizedRule = pluralRule.replacingOccurrences(of: "\(Self.XCSTRINGS_PLURAL_RULE_PREFIX).",
-                                                                     with: "")
-                icuRules.append("\(normalizedRule) {\(target)}")
+                if let attribute = XMLNode.attribute(withName: TXNative.CDS_XML_ID_ATTRIBUTE,
+                                                     stringValue: pluralRule) as? XMLNode {
+                    let xmlElement = XMLElement(name: TXNative.CDS_XML_TAG_NAME,
+                                                stringValue: target)
+                    xmlElement.addAttribute(attribute)
+                    root.addChild(xmlElement)
+                }
             }
+            
+            return root.childCount > 0 ? root.xmlString : nil
+        case .StringsDict:
+            // For the legacy substitutions, we attempt to convert the XML tags
+            // to the format of the `.xcstrings` above, so that the SDK can
+            // parse both of them, regardless of their initial type.
+            //
+            // This means that the pluralization rule that contains the localized
+            // format key (.containsLocalizedFormatKey == true), will become the
+            // main substitutions phrase, and have an id of "substitutions".
+            // Each of the other rules, will have an id that follows the format:
+            // "substitutions.PLURAL_KEY.plural.PLURAL_RULE".
+            let root = XMLElement(name: TXNative.CDS_XML_ROOT_TAG_NAME)
 
-            guard icuRules.count > 0 else {
-                return .failure(.emptyRule)
-            }
+            for pluralizationRule in pluralizationRules {
+                guard let target = pluralizationRule.target else {
+                    continue
+                }
 
-            return .success(("{cnt, plural, \(icuRules.joined(separator: " "))}", .Plural))
-        }
-        else {
-            var icuRuleType: ICURuleType = .Other
+                if pluralizationRule.containsLocalizedFormatKey {
+                    if let attribute = XMLNode.attribute(withName: TXNative.CDS_XML_ID_ATTRIBUTE,
+                                                         stringValue: Self.XCSTRINGS_SUBSTITUTIONS_RULE_PREFIX) as? XMLNode {
+                        let xmlElement = XMLElement(name: TXNative.CDS_XML_TAG_NAME,
+                                                    stringValue: target)
+                        xmlElement.addAttribute(attribute)
+                        root.addChild(xmlElement)
+                    }
+                    continue
+                }
 
-            if let rule = pluralizationRules.first?.pluralRule?.components(separatedBy: ".").first {
-                switch rule {
-                case Self.XCSTRINGS_DEVICE_RULE_PREFIX:
-                    icuRuleType = .Device
-                case Self.XCSTRINGS_SUBSTITUTIONS_RULE_PREFIX:
-                    icuRuleType = .Substitutions
-                default:
-                    icuRuleType = .Other
+                guard let pluralRule = pluralizationRule.pluralRule,
+                      let pluralKey = pluralizationRule.pluralKey else {
+                    continue
+                }
+
+                let id = "\(Self.XCSTRINGS_SUBSTITUTIONS_RULE_PREFIX).\(pluralKey).\(Self.XCSTRINGS_PLURAL_RULE_PREFIX).\(pluralRule)"
+                if let attribute = XMLNode.attribute(withName: TXNative.CDS_XML_ID_ATTRIBUTE,
+                                                     stringValue: id) as? XMLNode {
+                    let xmlElement = XMLElement(name: TXNative.CDS_XML_TAG_NAME,
+                                                stringValue: target)
+                    xmlElement.addAttribute(attribute)
+                    root.addChild(xmlElement)
                 }
             }
 
-            return .failure(.notSupported(icuRuleType))
+            return root.childCount > 0 ? root.xmlString : nil
         }
     }
 }
