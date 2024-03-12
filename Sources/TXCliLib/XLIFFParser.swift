@@ -12,9 +12,21 @@ import Transifex
 /// Structure that holds all the information about a pluralization rule exported from the XLIFF file being
 /// parsed.
 public struct PluralizationRule {
+    private static let STRINGSDICT_SEPARATOR = "/"
+    private static let STRINGSDICT_DICT_TYPE = ":dict"
+    private static let STRINGSDICT_STRING_TYPE = ":string"
+    private static let STRINGSDICT_LOCALIZED_FORMAT_KEY = "NSStringLocalizedFormatKey"
+
+    private static let XCSTRINGS_SEPARATOR = "|==|"
+
+    public enum StringsSourceType {
+        case StringsDict
+        case XCStrings
+    }
+
     private var components: [String]
     
-    var sourceString: String!
+    var sourceString: String
     var pluralKey: String?
     var pluralRule: String?
     var containsLocalizedFormatKey: Bool
@@ -22,42 +34,78 @@ public struct PluralizationRule {
     var source: String?
     var target: String?
     var note: String?
-    
+
+    var stringsSourceType : StringsSourceType
+
     /// Initializes the structure with the id attribute found in the `trans-unit` XML tag of the XLIFF
     /// file.
     ///
-    /// From this id, the components are extracted (via the `extractComponents` static method) and
-    /// the properties are initialized:
+    /// From this id, the components are extracted (via the `extractComponentsXCStrings` or
+    /// `extractComponentsStringsDict` static methods) and the properties are initialized:
     ///
-    /// For example, if the id is the following:
-    /// "/unit-time.%d-minute(s):dict/d_unit_time:dict/one:dict/:string"
+    /// For example, if the id is the following (from a `.xcstrings` file):
+    /// ```
+    /// "unit-time.%d-minute(s)|==|plural.one"
+    /// ```
     ///
     /// Then the properties have the following values:
-    /// sourceString: "/unit-time.%d-minute(s)"
+    /// sourceString: "unit-time.%d-minute(s)"
+    /// pluralKey: nil
+    /// pluralRule: "plural.one"
+    /// containsLocalizedFormatKey: false
+    ///
+    /// On the other hand, if the id is the following (from a `.stringsdict` file):
+    /// ```
+    /// "/unit-time.%d-minute(s):dict/d_unit_time:dict/one:dict/:string"
+    /// ```
+    ///
+    /// Then the properties have the following values:
+    /// sourceString: "unit-time.%d-minute(s)"
     /// pluralKey: "d_unit_time"
     /// pluralRule: "one"
     /// containsLocalizedFormatKey: false
     ///
     /// - Parameter id: The id attribute
     init?(with id: String) {
-        let components = PluralizationRule.extractComponents(from: id)
-        
-        if components.count < 2 {
-            return nil
+        if Self.isXCStringsID(id) {
+            self.stringsSourceType = .XCStrings
+
+            // Modern .xcstrings format
+            let components = Self.extractComponentsXCStrings(from: id)
+
+            if components.count != 2 {
+                return nil
+            }
+
+            self.components = components
+            self.sourceString = components[0]
+            self.containsLocalizedFormatKey = false
+            self.pluralKey = nil
+            self.pluralRule = components[1]
         }
-        
-        self.components = components
-        self.sourceString = components.first!
-        self.containsLocalizedFormatKey = id.contains("NSStringLocalizedFormatKey")
-        
-        if self.containsLocalizedFormatKey {
-            return
-        }
-        
-        self.pluralKey = components[1]
-        
-        if self.components.count > 2 {
-            self.pluralRule = self.components[2]
+        else {
+            self.stringsSourceType = .StringsDict
+
+            // Legacy .stringsdict format
+            let components = Self.extractComponentsStringsDict(from: id)
+
+            if components.count < 2 {
+                return nil
+            }
+
+            self.components = components
+            self.sourceString = components[0]
+            self.containsLocalizedFormatKey = id.contains(Self.STRINGSDICT_LOCALIZED_FORMAT_KEY)
+
+            if self.containsLocalizedFormatKey {
+                return
+            }
+
+            self.pluralKey = components[1]
+
+            if self.components.count > 2 {
+                self.pluralRule = self.components[2]
+            }
         }
     }
     
@@ -85,14 +133,35 @@ public struct PluralizationRule {
     ///
     /// - Parameter id: The id attribute
     /// - Returns: The components that define this pluralization rule
-    static private func extractComponents(from id: String) -> [String] {
+    static private func extractComponentsStringsDict(from id: String) -> [String] {
         return id
-            .replacingOccurrences(of: ":dict", with: "")
-            .replacingOccurrences(of: ":string", with: "")
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            .components(separatedBy: "/")
+            .replacingOccurrences(of: Self.STRINGSDICT_DICT_TYPE, with: "")
+            .replacingOccurrences(of: Self.STRINGSDICT_STRING_TYPE, with: "")
+            .trimmingCharacters(in: CharacterSet(charactersIn: Self.STRINGSDICT_SEPARATOR))
+            .components(separatedBy: Self.STRINGSDICT_SEPARATOR)
     }
-    
+
+    /// Parses the id attribute of the `trans-unit` XML tag and splits the string into components that
+    /// each represents a certain property to be used during the initialization of the `PluralizationRule`
+    ///
+    /// e.g:
+    /// For id:
+    /// "unit-time.%d-minute(s)|==|plural.one"
+    /// The components returned are:
+    /// [ "unit-time.%d-minute(s)", "plural.one"]
+    ///
+    /// - Parameter id: The id attribute
+    /// - Returns: The components that define this pluralization rule
+    static private func extractComponentsXCStrings(from id: String) -> [String] {
+        return id.components(separatedBy: XCSTRINGS_SEPARATOR)
+    }
+
+    /// - Parameter id: The id attribute
+    /// - Returns: True if the id contains a XCString identifier, False otherwise
+    static private func isXCStringsID(_ id: String) -> Bool {
+        return id.contains(XCSTRINGS_SEPARATOR)
+    }
+
     /// Checks whether two pluralization rules have the same source string.
     ///
     /// Important when deciding whether a pluralization rule is part of the same `TranslationUnit`.
@@ -123,7 +192,7 @@ public struct TranslationUnit {
     public var target: String
     public var files: [String] = []
     public var note: String?
-    public var pluralizationRules: [PluralizationRule]?
+    public var pluralizationRules: [PluralizationRule]
 }
 
 extension TranslationUnit: Equatable {
@@ -138,39 +207,163 @@ extension TranslationUnit: Equatable {
 }
 
 extension TranslationUnit {
+    private static let LOCALIZED_FORMAT_KEY_PREFIX = "%#@"
+    private static let LOCALIZED_FORMAT_KEY_SUFFIX:Character = "@"
+
+    /// Tags used by Apple's .xcstrings format
+    private static let XCSTRINGS_PLURAL_RULE_PREFIX = "plural"
+    private static let XCSTRINGS_DEVICE_RULE_PREFIX = "device"
+    private static let XCSTRINGS_SUBSTITUTIONS_RULE_PREFIX = "substitutions"
+
+    /// The types of the generated ICU rule by the `generateICURuleIfPossible` method.
+    public enum ICURuleType {
+        // Pluralization
+        case Plural
+        // Vary by device
+        case Device
+        // Substitution (multiple variables)
+        case Substitutions
+        // Something unexpected / not yet supported
+        case Other
+    }
+    
+    /// All possible errors emitted by the `generateICURuleIfPossible` method.
+    public enum ICUError: Error, CustomDebugStringConvertible {
+        // Not supported
+        case notSupported(ICURuleType)
+        // No pluralization rules found to process. Not really an error.
+        case noRules
+        // The legacy pluralization rules (.stringsdict) contain a localized
+        // format key that is not on the format that Apple recommends.
+        case malformedPluralizedFormat(String)
+        // The method could not generate an ICU rule based on the provided
+        // pluralization rules.
+        case emptyRule
+
+        public var debugDescription: String {
+            switch (self) {
+            case .notSupported(let type):
+                return "Pluralization rule not supported: \(type)"
+            case .noRules:
+                return "No pluralization rules found"
+            case .malformedPluralizedFormat(let error):
+                return "Malformed pluralized format detected: \(error)"
+            case .emptyRule:
+                return "Unable to generate ICU rule"
+            }
+        }
+    }
+
     /// If the current `TranslationUnit` contains a number of `PluralizationRule` objects in its
     /// property, then the method attempts to generate an ICU rule out of them that can be pushed to CDS.
     ///
     /// - Returns: The ICU pluralization rule if its generation is possible, nil otherwise.
-    public func generateICURuleIfPossible() -> String? {
-        guard let pluralizationRules = pluralizationRules,
-              pluralizationRules.count > 0 else {
-            return nil
+    public func generateICURuleIfPossible() -> Result<(String, ICURuleType), ICUError> {
+        guard pluralizationRules.count > 0 else {
+            return .failure(.noRules)
         }
         
         var icuRules : [String] = []
-        
-        for pluralizationRule in pluralizationRules {
-            if pluralizationRule.containsLocalizedFormatKey {
-                continue
-            }
-            
-            guard let pluralRule = pluralizationRule.pluralRule else {
-                continue
-            }
-            
-            guard let target = pluralizationRule.target else {
-                continue
-            }
-            
-            icuRules.append("\(pluralRule) {\(target)}")
+
+        let activeStringsSourceType = pluralizationRules.map { $0.stringsSourceType }.first
+
+        // For the legacy .stringsdict format, require the localized format key
+        // to have the %#@[KEY]@ format. Otherwise do not process it.
+        // As per documentation:
+        // > If the formatted string contains multiple variables, enter a separate subdictionary for each variable.
+        // Ref: https://developer.apple.com/documentation/xcode/localizing-strings-that-contain-plurals
+        // So for example, the following is correct:
+        //
+        // <trans-unit id="/devices.%lu-device(s):dict/NSStringLocalizedFormatKey:dict/:string" xml:space="preserve">
+        //   <source>%#@lu_devices@</source>
+        //   <target>%#@lu_devices@</target>
+        //   <note/>
+        // </trans-unit>
+        // <trans-unit id="/devices.%lu-device(s):dict/lu_devices:dict/one:dict/:string" xml:space="preserve">
+        //   <source>Message is sent to %lu device.</source>
+        //   <target>Message is sent to %lu device.</target>
+        //   <note/>
+        // </trans-unit>
+        // <trans-unit id="/devices.%lu-device(s):dict/lu_devices:dict/other:dict/:string" xml:space="preserve">
+        //   <source>Message is sent to %lu devices.</source>
+        //   <target>Message is sent to %lu devices.</target>
+        //   <note/>
+        // </trans-unit>
+        //
+        // while this is wrong:
+        //
+        // <trans-unit id="/devices.%lu-device(s):dict/NSStringLocalizedFormatKey:dict/:string" xml:space="preserve">
+        //   <source>Message is sent to %#@lu_devices@.</source>
+        //   <target>Message is sent to %#@lu_devices@.</target>
+        //   <note/>
+        // </trans-unit>
+        // <trans-unit id="/devices.%lu-device(s):dict/lu_devices:dict/one:dict/:string" xml:space="preserve">
+        //   <source>%lu device</source>
+        //   <target>%lu device</target>
+        //   <note/>
+        // </trans-unit>
+        // <trans-unit id="/devices.%lu-device(s):dict/lu_devices:dict/other:dict/:string" xml:space="preserve">
+        //   <source>%lu devices</source>
+        //   <target>%lu devices</target>
+        //   <note/>
+        // </trans-unit>
+        if activeStringsSourceType == .StringsDict,
+           let target = pluralizationRules.filter({ $0.containsLocalizedFormatKey}).first?.target,
+           !(target.starts(with: Self.LOCALIZED_FORMAT_KEY_PREFIX) && target.last == Self.LOCALIZED_FORMAT_KEY_SUFFIX) {
+            return .failure(.malformedPluralizedFormat(target))
         }
-        
-        guard icuRules.count > 0 else {
-            return nil
+
+        var isICUFriendly = false
+
+        if activeStringsSourceType == .StringsDict {
+            isICUFriendly = true
         }
-        
-        return "{cnt, plural, \(icuRules.joined(separator: " "))}"
+        else if let pluralRule = pluralizationRules.first?.pluralRule,
+                pluralRule.starts(with: "\(Self.XCSTRINGS_PLURAL_RULE_PREFIX).") {
+            isICUFriendly = true
+        }
+
+        if isICUFriendly {
+            for pluralizationRule in pluralizationRules {
+                if pluralizationRule.containsLocalizedFormatKey {
+                    continue
+                }
+
+                guard let pluralRule = pluralizationRule.pluralRule else {
+                    continue
+                }
+
+                guard let target = pluralizationRule.target else {
+                    continue
+                }
+
+                let normalizedRule = pluralRule.replacingOccurrences(of: "\(Self.XCSTRINGS_PLURAL_RULE_PREFIX).",
+                                                                     with: "")
+                icuRules.append("\(normalizedRule) {\(target)}")
+            }
+
+            guard icuRules.count > 0 else {
+                return .failure(.emptyRule)
+            }
+
+            return .success(("{cnt, plural, \(icuRules.joined(separator: " "))}", .Plural))
+        }
+        else {
+            var icuRuleType: ICURuleType = .Other
+
+            if let rule = pluralizationRules.first?.pluralRule?.components(separatedBy: ".").first {
+                switch rule {
+                case Self.XCSTRINGS_DEVICE_RULE_PREFIX:
+                    icuRuleType = .Device
+                case Self.XCSTRINGS_SUBSTITUTIONS_RULE_PREFIX:
+                    icuRuleType = .Substitutions
+                default:
+                    icuRuleType = .Other
+                }
+            }
+
+            return .failure(.notSupported(icuRuleType))
+        }
     }
 }
 
@@ -188,13 +381,15 @@ public class XLIFFParser: NSObject {
     private static let XML_FILE_NAME = "file"
     private static let XML_ID_ATTRIBUTE = "id"
     private static let XML_ORIGINAL_ATTRIBUTE = "original"
-    
+
+    private var pendingTranslationUnits: [PendingTranslationUnit] = []
+    private var pendingPluralizationRules: [PluralizationRule] = []
+
     private var activeTranslationUnit: PendingTranslationUnit?
-    private var activeElement: String?
-    private var activeFile: String?
+    private var activeElementName: String?
+    private var activeFileName: String?
     private var parseError: Error?
     
-    private var parsesStringDict = false
     private var activePluralizationRule: PluralizationRule?
     
     /// Internal struct that's used as a temporary data structure by the XML parser to store optional fields
@@ -228,38 +423,6 @@ public class XLIFFParser: NSObject {
     /// Initializes the parser for a certain XLIFF file.
     ///
     /// If the file cannot be found, the constructor returns a nil object.
-    ///
-    /// You can find a sample of an XLIFF file below:
-    ///
-    /// ```
-    /// <?xml version="1.0" encoding="UTF-8"?>
-    /// <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
-    ///   <file original="project/Base.lproj/Main.storyboard" source-language="en" target-language="en" datatype="plaintext">
-    ///     <header>
-    ///       <tool tool-id="com.apple.dt.xcode" tool-name="Xcode" tool-version="12.0" build-num="12A7208"/>
-    ///     </header>
-    ///     <body>
-    ///       <trans-unit id="7pN-ag-DRB.text" xml:space="preserve">
-    ///         <source>Label</source>
-    ///         <target>A localized label</target>
-    ///         <note>Class = "UILabel"; text = "Label"; ObjectID = "7pN-ag-DRB"; Note = "The main label of the app";</note>
-    ///       </trans-unit>
-    ///     </body>
-    ///   </file>
-    ///   <file original="project/en.lproj/Localizable.strings" source-language="en" target-language="en" datatype="plaintext">
-    ///     <header>
-    ///       <tool tool-id="com.apple.dt.xcode" tool-name="Xcode" tool-version="12.0" build-num="12A7208"/>
-    ///     </header>
-    ///     <body>
-    ///       <trans-unit id="This is a subtitle" xml:space="preserve">
-    ///         <source>This is a subtitle</source>
-    ///         <target>This is a subtitle</target>
-    ///         <note>The subtitle label set programatically</note>
-    ///       </trans-unit>
-    ///     </body>
-    ///   </file>
-    /// </xliff>
-    /// ```
     ///
     /// - Parameters:
     ///   - fileURL: The url of the XLIFF file
@@ -393,9 +556,7 @@ public class XLIFFParser: NSObject {
                     note = result.note
                 }
                 
-               if pluralizationRules == nil && result.pluralizationRules != nil {
-                    pluralizationRules = result.pluralizationRules
-                }
+                pluralizationRules = result.pluralizationRules
             }
             
             // If for some reason those units don't have the same id, source
@@ -421,37 +582,73 @@ public class XLIFFParser: NSObject {
         
         return consolidatedResults
     }
-    
-    private func appendActivePluralizationRuleToTranslationUnit() {
-        guard let activePluralizationRule = activePluralizationRule else {
+
+    /// Adds pending translation units and pluralization rules to the results array.
+    private func processPendingStructures() {
+        guard let fileName = activeFileName else {
             return
         }
-        
-        activeTranslationUnit?.pluralizationRules.append(activePluralizationRule)
-    }
-    
-    private func appendTranslationUnitToResults() {
-        guard let activeTranslationUnit = activeTranslationUnit,
-              let file = activeFile,
-              let source = activeTranslationUnit.source,
-              let target = activeTranslationUnit.target else {
-            return
+
+        // Process the translation units first
+        for pendingTranslationUnit in pendingTranslationUnits {
+            guard let source = pendingTranslationUnit.source,
+                  let target = pendingTranslationUnit.target else {
+                continue
+            }
+
+            let id = pendingTranslationUnit.id
+
+            // Find the associated pluralization rules for this translation
+            // unit.
+            let pluralizationRules = pendingPluralizationRules.filter {
+                $0.sourceString == id
+            }
+
+            let translationUnit = TranslationUnit(id: pendingTranslationUnit.id,
+                                                  source: source,
+                                                  target: target,
+                                                  files: [fileName],
+                                                  note: pendingTranslationUnit.note,
+                                                  pluralizationRules: pluralizationRules)
+            results.append(translationUnit)
+
+            // Remove the found rules from the pending array.
+            pendingPluralizationRules.removeAll { $0.sourceString == id }
         }
-        
-        var pluralizationRules : [PluralizationRule]? = nil
-        
-        if activeTranslationUnit.pluralizationRules.count > 0 {
-            pluralizationRules = activeTranslationUnit.pluralizationRules
+
+        pendingTranslationUnits.removeAll()
+
+        // If there are leftover pending pluralization rules, it means that they
+        // do not have an associated translation unit.
+        if pendingPluralizationRules.count > 0 {
+            // Group them based on their source string (use Set to use only the
+            // unique source strings).
+            let sourceStrings = Set(pendingPluralizationRules.map {
+                $0.sourceString
+            }).sorted()
+
+            // Process each group.
+            for sourceString in sourceStrings {
+                let pluralizationRules = pendingPluralizationRules.filter {
+                    $0.sourceString == sourceString
+                }
+
+                if pluralizationRules.count == 0 {
+                    continue
+                }
+
+                // Create a translation unit that hosts those rules.
+                let translationUnit = TranslationUnit(id: sourceString,
+                                                      source: sourceString,
+                                                      target: sourceString,
+                                                      files: [fileName],
+                                                      note: nil,
+                                                      pluralizationRules: pluralizationRules)
+                results.append(translationUnit)
+            }
         }
-        
-        let translationUnit = TranslationUnit(id: activeTranslationUnit.id,
-                                              source: source,
-                                              target: target,
-                                              files: [file],
-                                              note: activeTranslationUnit.note,
-                                              pluralizationRules: pluralizationRules)
-        
-        results.append(translationUnit)
+
+        pendingPluralizationRules.removeAll()
     }
 }
 
@@ -459,93 +656,61 @@ extension XLIFFParser : XMLParserDelegate {
     public func parser(_ parser: XMLParser, didStartElement elementName: String,
                 namespaceURI: String?, qualifiedName qName: String?,
                 attributes attributeDict: [String : String] = [:]) {
-        if elementName == XLIFFParser.XML_TRANSUNIT_NAME,
-           let id = attributeDict[XLIFFParser.XML_ID_ATTRIBUTE] {
-            
-            if parsesStringDict,
-               let pluralizationRule = PluralizationRule(with: id) {
-                
-                var shouldCreateTranslationUnit = false
-                
-                if let activePluralizationRule = activePluralizationRule,
-                   !activePluralizationRule.hasSameSourceString(with: pluralizationRule) {
-                    shouldCreateTranslationUnit = true
-                }
-                else if activeTranslationUnit == nil {
-                    shouldCreateTranslationUnit = true
-                }
-                
-                if activePluralizationRule != nil
-                   && activeTranslationUnit != nil {
-                    appendActivePluralizationRuleToTranslationUnit()
-                }
-                
-                if activeTranslationUnit != nil
-                   && shouldCreateTranslationUnit {
-                    appendTranslationUnitToResults()
-                }
-                
+        // <trans-unit id="{SOMETHING}">
+        if elementName == Self.XML_TRANSUNIT_NAME,
+           let id = attributeDict[Self.XML_ID_ATTRIBUTE] {
+
+            if let pluralizationRule = PluralizationRule(with: id) {
                 activePluralizationRule = pluralizationRule
-                
-                if shouldCreateTranslationUnit {
-                    activeTranslationUnit = PendingTranslationUnit(id: pluralizationRule.sourceString,
-                                                                   source: pluralizationRule.sourceString,
-                                                                   target: pluralizationRule.sourceString)
-                }
             }
             else {
                 activeTranslationUnit = PendingTranslationUnit(id: id)
             }
         }
-        else if elementName == XLIFFParser.XML_SOURCE_NAME
-                || elementName == XLIFFParser.XML_TARGET_NAME
-                || elementName == XLIFFParser.XML_NOTE_NAME {
-            if activeTranslationUnit != nil {
-                activeElement = elementName
-            }
+        // <source>, <target>, <note>
+        else if elementName == Self.XML_SOURCE_NAME
+                    || elementName == Self.XML_TARGET_NAME
+                    || elementName == Self.XML_NOTE_NAME {
+            activeElementName = elementName
         }
-        else if elementName == XLIFFParser.XML_FILE_NAME,
-             let original = attributeDict[XLIFFParser.XML_ORIGINAL_ATTRIBUTE]{
-            activeFile = original
-
-            let fileURL = URL(fileURLWithPath: original)
-            
-            if fileURL.pathExtension == "stringsdict" {
-                parsesStringDict = true
-            }
+        // <file original="{SOMETHING}">
+        else if elementName == Self.XML_FILE_NAME,
+                let original = attributeDict[Self.XML_ORIGINAL_ATTRIBUTE]{
+            activeFileName = original
         }
     }
     
     public func parser(_ parser: XMLParser, didEndElement elementName: String,
                 namespaceURI: String?, qualifiedName qName: String?) {
-        if elementName == XLIFFParser.XML_TRANSUNIT_NAME
-           && !parsesStringDict {
-            appendTranslationUnitToResults()
-            activeTranslationUnit = nil
-        }
-        else if elementName == XLIFFParser.XML_SOURCE_NAME
-                || elementName == XLIFFParser.XML_TARGET_NAME
-                || elementName == XLIFFParser.XML_NOTE_NAME {
-            if activeTranslationUnit != nil {
-                activeElement = nil
+        // </trans-unit>
+        if elementName == Self.XML_TRANSUNIT_NAME {
+            // If the translation unit contained a pluralization rule, append
+            // it to the active translation unit.
+            if let activePluralizationRule = activePluralizationRule {
+                pendingPluralizationRules.append(activePluralizationRule)
+                self.activePluralizationRule = nil
+            }
+            else if let activeTranslationUnit = activeTranslationUnit {
+                pendingTranslationUnits.append(activeTranslationUnit)
+                self.activeTranslationUnit = nil
             }
         }
-        else if elementName == XLIFFParser.XML_FILE_NAME {
-            if parsesStringDict {
-                appendActivePluralizationRuleToTranslationUnit()
-                appendTranslationUnitToResults()
-                
-                activeTranslationUnit = nil
-                activePluralizationRule = nil
-                parsesStringDict = false
-            }
-
-            activeFile = nil
+        // </source>, </target>, </note>
+        else if elementName == Self.XML_SOURCE_NAME
+                    || elementName == Self.XML_TARGET_NAME
+                    || elementName == Self.XML_NOTE_NAME {
+            activeElementName = nil
+        }
+        // </file>
+        else if elementName == Self.XML_FILE_NAME {
+            processPendingStructures()
+            activeFileName = nil
         }
     }
     
     public func parser(_ parser: XMLParser, foundCharacters string: String) {
-        if activeElement == XLIFFParser.XML_SOURCE_NAME {
+        // <source>{SOMETHING}</source>
+        if activeElementName == Self.XML_SOURCE_NAME {
             if activePluralizationRule != nil {
                 activePluralizationRule?.updateSource(string)
             }
@@ -553,7 +718,8 @@ extension XLIFFParser : XMLParserDelegate {
                 activeTranslationUnit?.updateSource(string)
             }
         }
-        else if activeElement == XLIFFParser.XML_TARGET_NAME {
+        // <target>{SOMETHING}</target>
+        else if activeElementName == Self.XML_TARGET_NAME {
             if activePluralizationRule != nil {
                 activePluralizationRule?.updateTarget(string)
             }
@@ -561,7 +727,8 @@ extension XLIFFParser : XMLParserDelegate {
                 activeTranslationUnit?.updateTarget(string)
             }
         }
-        else if activeElement == XLIFFParser.XML_NOTE_NAME {
+        // <note>{SOMETHING}</note>
+        else if activeElementName == Self.XML_NOTE_NAME {
             if activePluralizationRule != nil {
                 activePluralizationRule?.updateNote(string)
             }

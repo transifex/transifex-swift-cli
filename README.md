@@ -139,19 +139,19 @@ command. For example, for iOS applications the option can be set to `--base-sdk 
 
 ##### Pushing pluralizations limitations
 
-Currently (version 0.1.0) pluralization is supported but only for cases where one variable is
-used per pluralization rule. More advanced cases such as nested pluralization rules (for
-example: "%d out of %d values entered") will be supported in future releases.
+Generally, pluralization is supported but only for cases where one variable is used per pluralization rule.
 
-Also, at the moment of writing (version 0.1.0), the `.stringsdict` specification only supports
-plural types (`NSStringPluralRuleType`) which is the only possible value of the
-`NSStringFormatSpecTypeKey` key ([Ref](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPInternational/StringsdictFileFormat/StringsdictFileFormat.html#//apple_ref/doc/uid/10000171i-CH16-SW4)).
+Both the existing `.stringsdict` and the newly introduced string catalog (`.xcstrings`) files are supported with some limitations mentioned below.
 
-If more rule types are added in the `.stringsdict` specification, the XLIFF parser must be
-updated in order to be able to extract them properly and to construct the ICU format out
-of them.
+We are actively working on adding support for more variations in future releases.
 
-Width Variants in `.stringsdict` files are also not currently supported ([Ref](https://help.apple.com/xcode/mac/current/#/devaf8b4090a)).
+###### String Catalogs (`.xcstrings`)
+
+Only plural rules are supported for string catalogs. Device variation [^1] and substitution rules are not currently supported.
+
+###### Strings Dictionary Files (`.stringsdict`)
+
+Only the plural type is supported (`NSStringPluralRuleType`) which is the only possible value of the `NSStringFormatSpecTypeKey` key [^2]. Width Variants are not currently supported [^3] [^4].
 
 #### Pulling
 
@@ -186,3 +186,8 @@ command can be simplified to:
 ## License
 
 Licensed under Apache License 2.0, see [LICENSE](LICENSE) file.
+
+[^1]: https://developer.apple.com/documentation/xcode/localizing-and-varying-text-with-a-string-catalog#Vary-strings-by-device
+[^2]: https://developer.apple.com/documentation/xcode/localizing-strings-that-contain-plurals
+[^3]: https://help.apple.com/xcode/mac/current/#/devaf8b4090a
+[^4]: https://developer.apple.com/documentation/xcode/creating-width-and-device-variants-of-strings

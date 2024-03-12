@@ -74,7 +74,8 @@ final class XLIFFParserTests: XCTestCase {
                                              source: "Label",
                                              target: "A localized label",
                                              files: ["project/Base.lproj/Main.storyboard"],
-                                             note: "Class = \"UILabel\"; text = \"Label\"; ObjectID = \"7pN-ag-DRB\"; Note = \"The main label of the app\";")
+                                             note: "Class = \"UILabel\"; text = \"Label\"; ObjectID = \"7pN-ag-DRB\"; Note = \"The main label of the app\";",
+                                             pluralizationRules: [])
         
         XCTAssertEqual(results[0], translationOne)
         
@@ -82,12 +83,105 @@ final class XLIFFParserTests: XCTestCase {
                                              source: "This is a subtitle",
                                              target: "This is a subtitle",
                                              files: ["project/en.lproj/Localizable.strings"],
-                                             note: "The subtitle label set programatically")
+                                             note: "The subtitle label set programatically",
+                                             pluralizationRules: [])
         
         XCTAssertEqual(results[1], translationTwo)
     }
     
-    func testXLIFFParserWithStringsDict() {
+    func testXLIFFParserWithXCStrings() throws {
+        let fileURL = tempXLIFFFileURL()
+        let sampleXLIFF = """
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 http://docs.oasis-open.org/xliff/v1.2/os/xliff-core-1.2-strict.xsd">
+  <file original="SwiftSampleApp/Localizable.xcstrings" source-language="en" target-language="en" datatype="plaintext">
+    <header>
+      <tool tool-id="com.apple.dt.xcode" tool-name="Xcode" tool-version="15.3" build-num="15E204a"/>
+    </header>
+    <body>
+      <trans-unit id="I find your lack of faith disturbing." xml:space="preserve">
+        <source>I find your lack of faith disturbing.</source>
+        <target state="new">I find your lack of faith disturbing.</target>
+        <note/>
+      </trans-unit>
+      <trans-unit id="Powerful you have become, the dark side I sense in you." xml:space="preserve">
+        <source>Powerful you have become, the dark side I sense in you.</source>
+        <target state="new">Powerful you have become, the dark side I sense in you.</target>
+        <note/>
+      </trans-unit>
+      <trans-unit id="test string" xml:space="preserve">
+        <source>test string</source>
+        <target state="new">test string</target>
+        <note>Test comment</note>
+      </trans-unit>
+      <trans-unit id="unit-time.%d-minute(s)|==|plural.one" xml:space="preserve">
+        <source>%d minute</source>
+        <target state="translated">%d minute</target>
+        <note>dminutes</note>
+      </trans-unit>
+      <trans-unit id="unit-time.%d-minute(s)|==|plural.other" xml:space="preserve">
+        <source>%d minutes</source>
+        <target state="translated">%d minutes</target>
+        <note>dminutes</note>
+      </trans-unit>
+      <trans-unit id="unit-time.%u-minute(s)|==|plural.one" xml:space="preserve">
+        <source>%u minute</source>
+        <target state="translated">%u minute</target>
+        <note>uminutes</note>
+      </trans-unit>
+      <trans-unit id="unit-time.%u-minute(s)|==|plural.other" xml:space="preserve">
+        <source>%u minutes</source>
+        <target state="translated">%u minutes</target>
+        <note>uminutes</note>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>
+"""
+        do {
+            try sampleXLIFF.write(to: fileURL, atomically: true, encoding: .utf8)
+        }
+        catch { }
+
+        let xliffParser = XLIFFParser(fileURL: fileURL)
+        XCTAssertNotNil(xliffParser, "Failed to initialize parser")
+
+        let parsed = xliffParser!.parse()
+
+        XCTAssertTrue(parsed)
+
+        let results = xliffParser!.results
+
+        XCTAssertTrue(results.count == 5)
+
+        do {
+            let pluralizedResult = results[3]
+
+            XCTAssertTrue(pluralizedResult.pluralizationRules.count == 2)
+
+            let icuRule = try pluralizedResult.generateICURuleIfPossible().get()
+
+            let expectedIcuRule = "{cnt, plural, one {%d minute} other {%d minutes}}"
+
+            XCTAssertEqual(icuRule.0, expectedIcuRule)
+            XCTAssertEqual(icuRule.1, .Plural)
+        }
+
+        do {
+            let pluralizedResult = results[4]
+
+            XCTAssertTrue(pluralizedResult.pluralizationRules.count == 2)
+
+            let icuRule = try pluralizedResult.generateICURuleIfPossible().get()
+
+            let expectedIcuRule = "{cnt, plural, one {%u minute} other {%u minutes}}"
+
+            XCTAssertEqual(icuRule.0, expectedIcuRule)
+            XCTAssertEqual(icuRule.1, .Plural)
+        }
+    }
+
+    func testXLIFFParserWithStringsDict() throws {
         let fileURL = tempXLIFFFileURL()
         let sampleXLIFF = """
 <?xml version="1.0" encoding="UTF-8"?>
@@ -132,17 +226,17 @@ final class XLIFFParserTests: XCTestCase {
 
         XCTAssertTrue(results.count == 1)
 
-        let pluralizationRules = results.first!.pluralizationRules
+        XCTAssertTrue(results.first!.pluralizationRules.count == 3)
         
-        XCTAssertTrue(pluralizationRules?.count == 3)
-        
-        let icuRule = results.first!.generateICURuleIfPossible()
+        let icuRule = try results.first!.generateICURuleIfPossible().get()
+
         let expectedIcuRule = "{cnt, plural, one {%d minute} other {%d minutes}}"
-        
-        XCTAssertEqual(icuRule, expectedIcuRule)
+
+        XCTAssertEqual(icuRule.0, expectedIcuRule)
+        XCTAssertEqual(icuRule.1, .Plural)
     }
-    
-    func testXLIFFResultConsolidation() {
+
+    func testXLIFFResultConsolidation() throws {
         let fileURL = tempXLIFFFileURL()
         let sampleXLIFF = """
 <?xml version="1.0" encoding="UTF-8"?>
@@ -206,15 +300,15 @@ final class XLIFFParserTests: XCTestCase {
         let result = consolidatedResults.first!
         
         XCTAssertNotNil(result.note)
-        
-        XCTAssertNotNil(result.pluralizationRules)
-        
-        XCTAssertTrue(result.pluralizationRules!.count == 3)
 
-        let icuRule = result.generateICURuleIfPossible()
+        XCTAssertTrue(result.pluralizationRules.count == 3)
+
+        let icuRule = try result.generateICURuleIfPossible().get()
+
         let expectedIcuRule = "{cnt, plural, one {%d minute} other {%d minutes}}"
-        
-        XCTAssertEqual(icuRule, expectedIcuRule)
+
+        XCTAssertEqual(icuRule.0, expectedIcuRule)
+        XCTAssertEqual(icuRule.1, .Plural)
     }
     
     func testXLIFFParserWithQuotes() {

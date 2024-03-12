@@ -245,8 +245,21 @@ Emulate a content push, without doing actual changes.
             
             // If the result contains string dict elements, convert them to
             // ICU format and use that as a source string
-            if let icuRule = result.generateICURuleIfPossible() {
-                sourceString = icuRule
+            switch result.generateICURuleIfPossible() {
+            case .success((let icuRule, let icuRuleType)):
+                // Only support plural rule type for now
+                if icuRuleType == .Plural {
+                    sourceString = icuRule
+                }
+            case .failure(let error):
+                switch error {
+                case .noRules:
+                    break
+                default:
+                    logHandler.error("Error: \(error)")
+                    // Do not add a translation unit in case of an error.
+                    continue
+                }
             }
             
             let translationUnit = TXSourceString(key: key,
