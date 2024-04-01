@@ -116,6 +116,12 @@ always be able to export the source locale from the Xcode project.
 - Fixes the issue where leading and trailing white space was being added around
 the extracted ICU pluralization rules.
 
+## Transifex Command Line Tool 2.1.3
+
+*October 30, 2023*
+
+- Adds base SDK option for push command.
+
 ## Transifex Command Line Tool 2.1.4
 
 *March 7, 2024*
@@ -124,3 +130,10 @@ the extracted ICU pluralization rules.
 due to inversion. The option has been replaced by the `--delete-translations`
 option, in order to allow the underlying `keep_translations` meta flag to be
 set to `false`.
+
+## Transifex Command Line Tool 2.1.5
+
+*April 1, 2024*
+
+- Parses and processes the new `.xcstrings` files. Only supports simple
+"plural." rules for now.
