@@ -137,3 +137,11 @@ set to `false`.
 
 - Parses and processes the new `.xcstrings` files. Only supports simple
 "plural." rules for now.
+
+## Transifex Command Line Tool 2.1.6
+
+*May 29, 2024*
+
+- Adds full support for String Catalogs support.
+- Adds support for substitution phrases on old Strings Dictionary file format.
+- Updates unit tests.
