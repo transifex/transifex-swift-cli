@@ -137,21 +137,17 @@ If the `push` command fails with errors like "no such module 'UIKit'", the devel
 can manually specify the base SDK to be used using the `--base-sdk` option of the `push`
 command. For example, for iOS applications the option can be set to `--base-sdk iphoneos`.
 
-##### Pushing pluralizations limitations
+##### Pushing pluralizations
 
-Generally, pluralization is supported but only for cases where one variable is used per pluralization rule.
+Pluralization rules both on the new String Catalogs (`.xcstrings`) and the old Strings
+Dictionary (`.stringsdict`) formats are generally supported.
 
-Both the existing `.stringsdict` and the newly introduced string catalog (`.xcstrings`) files are supported with some limitations mentioned below.
+Single, plural rules are converted to the ICU format when pushed to CDS while more
+complex rules (device variations, substitutions, combinations) are converted to an
+intermediate XML format when pushed to CDS and converted back to the proper format
+when the SDK populates its cache during its initialization.
 
-We are actively working on adding support for more variations in future releases.
-
-###### String Catalogs (`.xcstrings`)
-
-Only plural rules are supported for string catalogs. Device variation [^1] and substitution rules are not currently supported.
-
-###### Strings Dictionary Files (`.stringsdict`)
-
-Only the plural type is supported (`NSStringPluralRuleType`) which is the only possible value of the `NSStringFormatSpecTypeKey` key [^2]. Width Variants are not currently supported [^3] [^4].
+The only variation related limitation concerns the width variants [^1] [^2].
 
 #### Pulling
 
@@ -187,7 +183,5 @@ command can be simplified to:
 
 Licensed under Apache License 2.0, see [LICENSE](LICENSE) file.
 
-[^1]: https://developer.apple.com/documentation/xcode/localizing-and-varying-text-with-a-string-catalog#Vary-strings-by-device
-[^2]: https://developer.apple.com/documentation/xcode/localizing-strings-that-contain-plurals
-[^3]: https://help.apple.com/xcode/mac/current/#/devaf8b4090a
-[^4]: https://developer.apple.com/documentation/xcode/creating-width-and-device-variants-of-strings
+[^1]: https://help.apple.com/xcode/mac/current/#/devaf8b4090a
+[^2]: https://developer.apple.com/documentation/xcode/creating-width-and-device-variants-of-strings
