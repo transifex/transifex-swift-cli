@@ -175,9 +175,9 @@ command can be simplified to:
 
 ## Minimum Requirements
 
-| Swift           | Xcode           | Platforms                                         |
-|-----------------|-----------------|---------------------------------------------------|
-| Swift 5.3       | Xcode 12.3      | MacOS 10.13  |
+| Swift           | Xcode           | Platforms    |
+|-----------------|-----------------|--------------|
+| Swift 5.3       | Xcode 15.4      | MacOS 10.13  |
 
 ## License
 
