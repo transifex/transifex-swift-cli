@@ -149,6 +149,16 @@ when the SDK populates its cache during its initialization.
 
 The only variation related limitation concerns the width variants [^1] [^2].
 
+##### Further notes
+
+* In order for the `push` command to be successful, the target project / workspace
+must be buildable by Xcode with no compilation errors.
+
+* If you are trying to `push` the translations of a CocoaPods project, then use
+the `.xcworkspace` directory on the `--project` argument instead of the
+`.xcodeproj` one, otherwise the `push` command will fail with framework not found
+linker errors.
+
 #### Pulling
 
 `txios-cli pull --token <transifex_token> --translated-locales <translated_locale_list> --output <output_directory>`
