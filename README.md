@@ -189,6 +189,18 @@ command can be simplified to:
 |-----------------|-----------------|--------------|
 | Swift 5.3       | Xcode 15.4      | MacOS 10.13  |
 
+> [!NOTE]
+>
+> Please make sure that the active developer directory points to the Xcode directory.
+>
+> To print the active developer directory path: `xcode-select -p`
+>
+> To switch the active developer directory path to Xcode:
+>
+> ```
+> xcode-select -s /Applications/Xcode.app/Contents/Developer
+> ```
+
 ## License
 
 Licensed under Apache License 2.0, see [LICENSE](LICENSE) file.
