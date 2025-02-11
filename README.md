@@ -171,6 +171,16 @@ command can be simplified to:
 
 `txios-cli pull --translated-locales <translated_locale_list> --output <output_directory>`
 
+After successfully pulling the `txstrings.json` file to a specified output directory,
+you can bundle it in your Xcode project by copying it and making sure it is included in
+the 'Copy Bundle Resources' build phase, so that Transifex Native library can
+look it up upon your application's launch.
+
+Bundling this file to your project means that the SDK will be able to locate and use those
+cached translations immediately upon launch, even when the device is offline, without the need
+for the app to download the translations over the Internet and display them on the next
+application launch.
+
 #### Invalidating CDS cache
 
 `txios-cli invalidate --token <transifex_token>`
