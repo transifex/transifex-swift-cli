@@ -149,6 +149,16 @@ when the SDK populates its cache during its initialization.
 
 The only variation related limitation concerns the width variants [^1] [^2].
 
+##### Further notes
+
+* In order for the `push` command to be successful, the target project / workspace
+must be buildable by Xcode with no compilation errors.
+
+* If you are trying to `push` the translations of a CocoaPods project, then use
+the `.xcworkspace` directory on the `--project` argument instead of the
+`.xcodeproj` one, otherwise the `push` command will fail with framework not found
+linker errors.
+
 #### Pulling
 
 `txios-cli pull --token <transifex_token> --translated-locales <translated_locale_list> --output <output_directory>`
@@ -160,6 +170,16 @@ If the developer has already set the enviroment variables mentioned above, then 
 command can be simplified to:
 
 `txios-cli pull --translated-locales <translated_locale_list> --output <output_directory>`
+
+After successfully pulling the `txstrings.json` file to a specified output directory,
+you can bundle it in your Xcode project by copying it and making sure it is included in
+the 'Copy Bundle Resources' build phase, so that Transifex Native library can
+look it up upon your application's launch.
+
+Bundling this file to your project means that the SDK will be able to locate and use those
+cached translations immediately upon launch, even when the device is offline, without the need
+for the app to download the translations over the Internet and display them on the next
+application launch.
 
 #### Invalidating CDS cache
 
@@ -178,6 +198,18 @@ command can be simplified to:
 | Swift           | Xcode           | Platforms    |
 |-----------------|-----------------|--------------|
 | Swift 5.3       | Xcode 15.4      | MacOS 10.13  |
+
+> [!NOTE]
+>
+> Please make sure that the active developer directory points to the Xcode directory.
+>
+> To print the active developer directory path: `xcode-select -p`
+>
+> To switch the active developer directory path to Xcode:
+>
+> ```
+> xcode-select -s /Applications/Xcode.app/Contents/Developer
+> ```
 
 ## License
 
