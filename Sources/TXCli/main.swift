@@ -521,6 +521,14 @@ Change the source locale if it is different than 'en'.
 e.g. --source-locale en_GB
 """)
     private var sourceLocale: String = "en"
+    
+    @Flag(name: .long, help: """
+Attempt to generate the translations file even if some of the requested locales
+are missing.
+""")
+    private var ignoreMissingLocales: Bool = false
+
+    private static let HTTP_STATUS_CODE_NOT_FOUND = 404
 
     func run() throws {
         let logHandler = CliLogHandler()
@@ -574,9 +582,28 @@ e.g. --source-locale en_GB
         // Stop log message deferring and report any deferred logs
         logHandler.deferred = false
 
-        guard appErrors.count == 0 else {
-            logHandler.error("Errors while fetching translations from CDS: \(appErrors)")
-            throw CommandError.cdsPullFailure
+        // Fetch result contained errors
+        if appErrors.count > 0 {
+            // If user has not opted in ignoring missing locales (defaults to
+            // false), then throw an error immediately.
+            guard ignoreMissingLocales else {
+                throw CommandError.cdsPullFailure
+            }
+
+            // Check if the produced errors are only missing locale errors,
+            // otherwise we need to throw an error immediately.
+            let missingLocaleErrors = appErrors.filter { error in
+                if let cdsError = error as? TXCDSError,
+                      case .serverError(let statusCode, _) = cdsError,
+                      statusCode == Self.HTTP_STATUS_CODE_NOT_FOUND {
+                            return true
+                      }
+                return false
+            }
+            
+            if missingLocaleErrors.count < appErrors.count {
+                throw CommandError.cdsPullFailure
+            }
         }
         
         logHandler.info("""
