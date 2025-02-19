@@ -13,7 +13,7 @@ import Foundation
 import CLISpinner
 
 /// All possible error codes that might trigger a failure during the execution of a TXCli command.
-enum CommandError : Error {
+enum CommandError : Error, CustomStringConvertible {
     case missingToken
     case missingSecret
     case exporterInitializationFailure
@@ -26,6 +26,36 @@ enum CommandError : Error {
     case outputDirectoryCreationFailure
     case outputFileWritingFailure
     case cdsCacheInvalidationFailure
+    
+    // Human-readable error codes
+    public var description: String {
+        switch self {
+        case .missingToken:
+            return "Token is missing"
+        case .missingSecret:
+            return "Secret is missing"
+        case .exporterInitializationFailure:
+            return "Exporter failed to initialize"
+        case .exportingFailure:
+            return "Exporting failed"
+        case .xliffParserInitializationFailure:
+            return "XLIFF parser failed to initialze"
+        case .xliffParsingFailure:
+            return "XLIFF parsong failed"
+        case .cdsPushFailure:
+            return "Push to CDS failed"
+        case .cdsPullFailure:
+            return "Pull from CDS failed"
+        case .translationsEncodingFailure:
+            return "Encoding failure encountered when processing translations"
+        case .outputDirectoryCreationFailure:
+            return "Creation of output directory failed"
+        case .outputFileWritingFailure:
+            return "Writing to the output file failed"
+        case .cdsCacheInvalidationFailure:
+            return "CDS cache invalidation failed"
+        }
+    }
 }
 
 /// Base command of TXCli app, this command describes the basic usage of the CLI app and lists all
