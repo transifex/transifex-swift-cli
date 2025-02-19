@@ -376,61 +376,8 @@ Warning: Empty key on source string:
                                  trailingLine: true)
                 continue
             }
-            switch error {
-            case .noDataToBeSent:
-                logHandler.error("Error encoding source strings",
-                                 trailingLine: true)
-
-            case .invalidCDSURL:
-                logHandler.error("Error: Invalid CDS host URL:",
-                                 trailingLine: true)
-
-            case .failedSerialization(let err):
-                logHandler.error("Error while serializing translations: \(err)",
-                                 trailingLine: true)
-
-            case .requestFailed(let err):
-                logHandler.error("Error pushing strings: \(err)",
-                                 trailingLine: true)
-
-            case .invalidHTTPResponse:
-                logHandler.error("Error pushing strings: Not a valid HTTP response",
-                                 trailingLine: true)
-
-            case .serverError(let statusCode):
-                logHandler.error("HTTP Status error while pushing strings: \(statusCode)",
-                                 trailingLine: true)
-
-            case .noData:
-                logHandler.error("Error: No data received while pushing strings",
-                                 trailingLine: true)
-
-            case .nonParsableResponse:
-                logHandler.error("Error while decoding CDS push response",
-                                 trailingLine: true)
-
-            case .failedJobRequest:
-                logHandler.error("Error: Fetch job status request failed",
-                                 trailingLine: true)
-
-            case .maxRetriesReached:
-                logHandler.info("[prompt]Strings are queued for processing[end]")
-
-            case .jobError(status: let status,
-                           code: let code,
-                           title: let title,
-                           detail: let detail,
-                           source: let source):
-                logHandler.error("""
-Error: \(title) (\(status) - \(code)):
-Detail: \(detail)
-Source: \(source)
-""", trailingLine: true)
-
-            default:
-                logHandler.error("Error while pushing source strings to CDS",
-                                 trailingLine: true)
-            }
+            logHandler.error("\(error)",
+                             trailingLine: true)
         }
 
         if pushResult {
