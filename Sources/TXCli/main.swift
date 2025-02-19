@@ -76,18 +76,32 @@ You can either provide the Transifex token and secret via enviroment variables
 """
     )
     
-    @Option(name: .long, help: "Source locale")
+    @Option(name: .long, help: """
+Change the source locale if it is different than 'en'.
+
+e.g. --source-locale en_GB
+""")
     private var sourceLocale: String = "en"
 
     @Option(name: .long, help: """
-The name or path of the base SDK to be used when exporting project's localizations
-(e.g. iphoneos, macosx, iphoneos17.0, a path to the base SDK etc).
+Optional name or path of the base SDK to be used when exporting project's
+localizations.
+
+e.g.
+--base-sdk macosx
+--base-sdk iphoneos17.0
+--base-sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.2.sdk
 """)
     private var baseSDK: String?
 
     @Option(name: .long, help: """
-Either the path to the project's .xcodeproj or .xcworkspace (e.g. ../MyProject/myproject.xcodeproj),
-or the path to the generated .xliff (e.g. ../en.xliff).
+The absolute or relative path to the project's .xcodeproj , .xcworkspace or to
+the generated .xliff.
+
+e.g. 
+--project ../MyProject/myproject.xcodeproj
+--project ../MyProject/myproject.xcworkspace
+--project ../en.xliff
 """)
     private var project : String
     
@@ -97,14 +111,18 @@ Whether to keep the temporary folder that contains the generated .xcloc or not.
     private var keepTempFolder: Bool = false
     
     @Option(name: .long, parsing: .upToNextOption, help: """
-A list of optional global tags to be included in all source strings pushed to
-the CDS server.
+Optional space-separated list of global tags to be included in all source
+strings pushed to the CDS server.
+
+e.g. --append-tags master react
 """)
     private var appendTags: [String] = []
     
     @Option(name: .long, parsing: .upToNextOption, help: """
-An optional list of localizable files that the logic must exclude when
-processing the exported strings.
+Optional space-separated list of localizable files that the logic must exclude
+when processing the exported strings.
+
+e.g. --excluded-files target1/Info.strings target2/Info.strings
 """)
     private var excludedFiles: [String] = []
 
@@ -116,43 +134,45 @@ Control whether the keys of strings to be pushed should be hashed (true) or not
     private var hashKeys: Bool = false
 
     @Flag(name: .long, help: """
-If purge: true, then replace the entire resource content with the pushed content
-of this request.
+If --purge is specified, then the logic replaces the entire resource content
+with the pushed content of this request.
 
-If purge: false (default), then append the source content of this request to the
-existing resource content.
+If --purge is not specified, then the logic appends the source content of this
+request to the existing resource content.
 """)
     private var purge: Bool = false
 
     @Flag(name: .long, help: """
-If override-tags: true, then replace the existing string tags with the tags of
-this request.
+If --override-tags is specified, then the logic replaces the existing string
+tags with the tags of this request.
 
-If override-tags: false (default), then append tags from source content to tags
-of existing strings instead of overwriting them.
+If --override-tags is not specified, then the logic appends the tags from the 
+source content of this request to the tags of existing strings instead of
+overwriting them.
 """)
     private var overrideTags: Bool = false
 
     @Flag(name: .long, help: """
-If override-occurrences: true, then replace the existing string occurrences with
-the occurrences of this request.
+If --override-occurrences is specified, then the logic replaces the existing
+string occurrences with the occurrences of this request.
 
-If override-occurrences: false (default), then append occurrences from source
-content to occurrences of existing strings instead of overwriting them.
+If --override-occurrences is not specified, then the logic appends the
+occurrences from the source content of this request to the occurrences of the
+existing strings instead of overwriting them.
 """)
     private var overrideOccurrences: Bool = false
 
     @Flag(name: .long, help: """
-If delete-translations: true, then delete translations on source string content
-updates.
+If --delete-translations is specified, then the logic deletes the translations
+on source string content updates.
 
-If delete-translations: false (default), then preserve translations on source
-content updates.
+If --delete-translation is not specified, then the logic preserves the
+translations on source content updates.
 """)
     private var deleteTranslations: Bool = false
 
     @Flag(name: .long, help: """
-Emulate a content push, without doing actual changes.
+Emulate a content push, without performing any actual changes.
 """)
     private var dryRun: Bool = false
 
@@ -457,9 +477,12 @@ or via the --token parameter.
     )
 
     @Option(name: .long, parsing: .upToNextOption, help: """
-A list of the available locales that the application supports and will be
-downloaded from CDS. If both source and target locales are provided in the list,
-they will also be requested from CDS.
+A space-separated list of the available locales that the application supports 
+and will be downloaded from CDS. 
+If both source and target locales are provided in the list, they will also be
+requested from CDS.
+
+e.g. --translated-locales en el fr
 """)
     private var translatedLocales: [String]
     
@@ -467,29 +490,37 @@ they will also be requested from CDS.
 The folder to be used to store the generated translations file. You can use
 either a relative or an absolute path. If the folder doesn't exist, the tool
 will try to create it (alongside any intermediate folders).
+
+e.g. --output ~/Desktop/
 """)
     private var output: String
     
     @Option(name: .long, parsing: .upToNextOption, help: """
-If set, only the strings that have all of the given tags will be downloaded.
+Optional space-separated list that if provided, only the strings containing
+all of the specified tags will be downloaded.
 
 This option can be used alongside the --with-status-only option.
+
+e.g. --with-tags-only master react
 """)
     private var withTagsOnly: [String] = []
     
     @Option(name: .long, help: """
-If set, only the strings that have the provided status assigned will be
-downloaded.
+Optional value that if provided, only the strings that have the specified
+status assigned will be downloaded.
 
 This option can be used alongside the --with-tags-only option.
+
+e.g. --with-status-only translated
 """)
     private var withStatusOnly: String?
 
     @Option(name: .long, help: """
-Provide a source locale if it is different than 'en'. Otherwise the logic will
-default to the 'en' source locale.
+Change the source locale if it is different than 'en'.
+
+e.g. --source-locale en_GB
 """)
-    private var sourceLocale: String?
+    private var sourceLocale: String = "en"
 
     func run() throws {
         let logHandler = CliLogHandler()
