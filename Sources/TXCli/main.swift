@@ -514,6 +514,9 @@ default to the 'en' source locale.
         
         logHandler.info("[high]Fetching translations from CDS...[end]")
         
+        // Defer log reporting until the pull logic completes
+        logHandler.deferred = true
+
         let spinner = Spinner(pattern: .dots, text: "Fetching")
         if !options.verbose {
             spinner.start()
@@ -536,7 +539,10 @@ default to the 'en' source locale.
         if !options.verbose {
             spinner.stopAndClear()
         }
-        
+
+        // Stop log message deferring and report any deferred logs
+        logHandler.deferred = false
+
         guard appErrors.count == 0 else {
             logHandler.error("Errors while fetching translations from CDS: \(appErrors)")
             throw CommandError.cdsPullFailure
