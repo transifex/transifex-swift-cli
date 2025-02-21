@@ -14,6 +14,20 @@ public class CliLogHandler: TXLogHandler {
     /// (verbose: true) or not (verbose: false).
     public var verbose: Bool = false
     
+    /// Flag that controls whether the log statements will be logged immediately in the console
+    /// (`deferred: false`) or they will be collected and reported when the value of that flag is set
+    /// back from `true` to `false`.
+    public var deferred = false {
+        didSet {
+            if deferred == false {
+                defferedLogs.forEach { log($0) }
+                defferedLogs.removeAll()
+            }
+        }
+    }
+
+    private var defferedLogs: [String] = []
+
     public init() { }
     
     public func info(_ message: String) {
@@ -61,6 +75,10 @@ public class CliLogHandler: TXLogHandler {
     }
     
     private func log(_ message: String) {
+        guard !deferred else {
+            defferedLogs.append(message)
+            return
+        }
         print(CliSyntaxColor.format(message))
     }
 }
