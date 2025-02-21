@@ -123,13 +123,21 @@ public class LocalizationExporter {
         let outputPipe = Pipe()
         let errorPipe = Pipe()
 
+        let xcodebuildURL = URL(fileURLWithPath: extractActiveDeveloperDirectory() ?? "/")
+            .appendingPathComponent("usr/bin/xcodebuild")
+
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcodebuild")
-        process.arguments = [ "-exportLocalizations",
-                              "-localizationPath", exportURL.path,
-                              isProject ? "-project" : "-workspace", project.path]
+        process.executableURL = xcodebuildURL
+        process.arguments = [
+            "-exportLocalizations",
+            "-localizationPath", exportURL.path,
+            isProject ? "-project" : "-workspace", project.path
+        ]
         if let baseSDK = baseSDK {
-            process.arguments?.append(contentsOf: [ "-sdk", baseSDK])
+            process.arguments?.append(contentsOf: [
+                "-sdk", baseSDK
+            ])
+        }
         }
         process.standardOutput = outputPipe
         process.standardError = errorPipe
@@ -210,5 +218,34 @@ xcodebuild error:
         }
         
         return xliffURL
+    }
+
+    /// Executes the xcode-select -p command and reports back the active developer directory or nil in
+    /// case on an error.
+    ///
+    /// - Returns: The active developer directory or nil in case on an error.
+    private func extractActiveDeveloperDirectory() -> String? {
+        let outputPipe = Pipe()
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcode-select")
+        process.arguments = ["-p"]
+        process.standardOutput = outputPipe
+
+        do {
+            try process.run()
+        }
+        catch {
+            logHandler?.error("""
+Error executing xcode-select -p:
+\(error)
+""")
+            return nil
+        }
+
+        let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        return String(decoding: outputData,
+                      as: UTF8.self).trimmingCharacters(in:
+                            .whitespacesAndNewlines)
     }
 }
