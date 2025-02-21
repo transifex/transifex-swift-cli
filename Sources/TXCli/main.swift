@@ -205,6 +205,25 @@ translations on source content updates.
 Emulate a content push, without performing any actual changes.
 """)
     private var dryRun: Bool = false
+    
+    @Option(name: .long,
+            help: """
+Optional extra parameters to be passed on the internal xcodebuild call.
+
+By default only the following parameters are used:
+
+* -exportLocalizations
+* -localizationPath
+* -project / -workspace
+* -sdk (if --base-sdk option is set)
+
+Make sure that you pass this option with an = operator, as shown in the example
+below.
+
+e.g. 
+--extra-params="-quiet -scheme my-scheme -configuration Release"
+""")
+    private var extraParams: String?
 
     func run() throws {
         let logHandler = CliLogHandler()
@@ -245,6 +264,7 @@ Emulate a content push, without performing any actual changes.
             guard let locExporter = LocalizationExporter(sourceLocale: sourceLocale,
                                                          project: projectURL,
                                                          baseSDK: baseSDK,
+                                                         extraParams: extraParams,
                                                          logHandler: logHandler) else {
                 logHandler.error("Failed to initialize localization exporter")
                 throw CommandError.exporterInitializationFailure

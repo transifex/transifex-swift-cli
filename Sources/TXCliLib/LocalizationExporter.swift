@@ -24,6 +24,9 @@ public class LocalizationExporter {
     /// The base SDK to be used.
     private let baseSDK: String?
 
+    /// Extra parameters provided by the developer for the xcodebuild call.
+    private let extraParams: String?
+
     private static let TEMP_FOLDER_PREFIX = "txios-cli-"
     
     private static let LOCALIZED_CONTENTS_FOLDER_NAME = "Localized Contents"
@@ -42,10 +45,12 @@ public class LocalizationExporter {
     ///   - sourceLocale: The source locale for the base localization
     ///   - project: The path to the project name (can be a relative path)
     ///   - baseSDK: The base sdk to be used (optional)
+    ///   - extraParams: String containing extra parameters for the xcodebuild call (optional)
     ///   - logHandler: Optional log handler
     public init?(sourceLocale: String,
                  project: URL,
                  baseSDK: String?,
+                 extraParams: String?,
                  logHandler: TXLogHandler? = nil) {
         guard project.pathExtension == "xcodeproj"
                 || project.pathExtension == "xcworkspace" else {
@@ -63,6 +68,7 @@ public class LocalizationExporter {
         self.project = project
         self.logHandler = logHandler
         self.baseSDK = baseSDK
+        self.extraParams = extraParams
 
         let uuidString = UUID().uuidString
         let tempExportURLPath = LocalizationExporter.TEMP_FOLDER_PREFIX + uuidString
@@ -138,6 +144,8 @@ public class LocalizationExporter {
                 "-sdk", baseSDK
             ])
         }
+        extraParams?.components(separatedBy: " ").forEach {
+            process.arguments?.append($0)
         }
         process.standardOutput = outputPipe
         process.standardError = errorPipe
