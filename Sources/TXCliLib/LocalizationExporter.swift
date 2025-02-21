@@ -117,7 +117,7 @@ public class LocalizationExporter {
     ///
     /// - Returns: The URL to the source locale XLIFF file, nil in case of an error.
     public func export() -> URL? {
-        logHandler?.verbose("[prompt]Exporting localizations for project \(project) to[end] [file]\(exportURL.path)[end][prompt]...[end]")
+        logHandler?.verbose("[prompt]Exporting localizations for project \(project.path) to[end] [file]\(exportURL.path)[end][prompt]...[end]")
         
         let isProject = project.pathExtension == "xcodeproj"
         let outputPipe = Pipe()
@@ -133,7 +133,13 @@ public class LocalizationExporter {
         }
         process.standardOutput = outputPipe
         process.standardError = errorPipe
-        
+
+        logHandler?.verbose("""
+Command line invocation:
+    \(xcodebuildURL.path) \(process.arguments?.joined(separator: " ") ?? "")
+
+""")
+
         do {
             try process.run()
         }
@@ -141,6 +147,7 @@ public class LocalizationExporter {
             logHandler?.error("""
 Error executing xcodebuild:
 \(error)
+
 """)
             return nil
         }
@@ -165,8 +172,9 @@ Error executing xcodebuild:
 
         if output.count > 0 {
             logHandler?.verbose("""
-[warn]xcodebuild output:[end]
-[warn]\(output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines))[end]
+xcodebuild output:
+[cyan]\(output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines))[end]
+
 """)
         }
 
@@ -174,8 +182,10 @@ Error executing xcodebuild:
 
         if error.count > 0 {
             logHandler?.verbose("""
+
 xcodebuild error:
-\(error.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines))
+[warn]\(error.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines))[end]
+
 """)
         }
         
