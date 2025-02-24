@@ -24,6 +24,9 @@ public class LocalizationExporter {
     /// The base SDK to be used.
     private let baseSDK: String?
 
+    /// Extra parameters provided by the developer for the xcodebuild call.
+    private let extraParams: String?
+
     private static let TEMP_FOLDER_PREFIX = "txios-cli-"
     
     private static let LOCALIZED_CONTENTS_FOLDER_NAME = "Localized Contents"
@@ -42,10 +45,12 @@ public class LocalizationExporter {
     ///   - sourceLocale: The source locale for the base localization
     ///   - project: The path to the project name (can be a relative path)
     ///   - baseSDK: The base sdk to be used (optional)
+    ///   - extraParams: String containing extra parameters for the xcodebuild call (optional)
     ///   - logHandler: Optional log handler
     public init?(sourceLocale: String,
                  project: URL,
                  baseSDK: String?,
+                 extraParams: String?,
                  logHandler: TXLogHandler? = nil) {
         guard project.pathExtension == "xcodeproj"
                 || project.pathExtension == "xcworkspace" else {
@@ -63,6 +68,7 @@ public class LocalizationExporter {
         self.project = project
         self.logHandler = logHandler
         self.baseSDK = baseSDK
+        self.extraParams = extraParams
 
         let uuidString = UUID().uuidString
         let tempExportURLPath = LocalizationExporter.TEMP_FOLDER_PREFIX + uuidString
@@ -117,23 +123,39 @@ public class LocalizationExporter {
     ///
     /// - Returns: The URL to the source locale XLIFF file, nil in case of an error.
     public func export() -> URL? {
-        logHandler?.verbose("[prompt]Exporting localizations for project \(project) to[end] [file]\(exportURL.path)[end][prompt]...[end]")
+        logHandler?.verbose("[prompt]Exporting localizations for project \(project.path) to[end] [file]\(exportURL.path)[end][prompt]...[end]")
         
         let isProject = project.pathExtension == "xcodeproj"
         let outputPipe = Pipe()
         let errorPipe = Pipe()
 
+        let xcodebuildURL = URL(fileURLWithPath: extractActiveDeveloperDirectory() ?? "/")
+            .appendingPathComponent("usr/bin/xcodebuild")
+
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcodebuild")
-        process.arguments = [ "-exportLocalizations",
-                              "-localizationPath", exportURL.path,
-                              isProject ? "-project" : "-workspace", project.path]
+        process.executableURL = xcodebuildURL
+        process.arguments = [
+            "-exportLocalizations",
+            "-localizationPath", exportURL.path,
+            isProject ? "-project" : "-workspace", project.path
+        ]
         if let baseSDK = baseSDK {
-            process.arguments?.append(contentsOf: [ "-sdk", baseSDK])
+            process.arguments?.append(contentsOf: [
+                "-sdk", baseSDK
+            ])
+        }
+        extraParams?.components(separatedBy: " ").forEach {
+            process.arguments?.append($0)
         }
         process.standardOutput = outputPipe
         process.standardError = errorPipe
-        
+
+        logHandler?.verbose("""
+Command line invocation:
+    \(xcodebuildURL.path) \(process.arguments?.joined(separator: " ") ?? "")
+
+""")
+
         do {
             try process.run()
         }
@@ -141,6 +163,7 @@ public class LocalizationExporter {
             logHandler?.error("""
 Error executing xcodebuild:
 \(error)
+
 """)
             return nil
         }
@@ -165,8 +188,9 @@ Error executing xcodebuild:
 
         if output.count > 0 {
             logHandler?.verbose("""
-[warn]xcodebuild output:[end]
-[warn]\(output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines))[end]
+xcodebuild output:
+[cyan]\(output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines))[end]
+
 """)
         }
 
@@ -174,8 +198,10 @@ Error executing xcodebuild:
 
         if error.count > 0 {
             logHandler?.verbose("""
+
 xcodebuild error:
-\(error.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines))
+[warn]\(error.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines))[end]
+
 """)
         }
         
@@ -200,5 +226,34 @@ xcodebuild error:
         }
         
         return xliffURL
+    }
+
+    /// Executes the xcode-select -p command and reports back the active developer directory or nil in
+    /// case on an error.
+    ///
+    /// - Returns: The active developer directory or nil in case on an error.
+    private func extractActiveDeveloperDirectory() -> String? {
+        let outputPipe = Pipe()
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcode-select")
+        process.arguments = ["-p"]
+        process.standardOutput = outputPipe
+
+        do {
+            try process.run()
+        }
+        catch {
+            logHandler?.error("""
+Error executing xcode-select -p:
+\(error)
+""")
+            return nil
+        }
+
+        let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        return String(decoding: outputData,
+                      as: UTF8.self).trimmingCharacters(in:
+                            .whitespacesAndNewlines)
     }
 }

@@ -145,3 +145,16 @@ set to `false`.
 - Adds full support for String Catalogs support.
 - Adds support for substitution phrases on old Strings Dictionary file format.
 - Updates unit tests.
+
+## Transifex Command Line Tool 2.1.7
+
+*February 21, 2025*
+
+- Updates Transifex Swift package dependency to 2.0.7.
+- Defers logging while translations are fetched from CDS.
+- Reviews and updates help text on push / pull command options.
+- Introduces `--ignore-missing-locales` option in `pull` command.
+- Introduces `--extra-params` option in `push` command.
+- Executes `xcodebuild` from active developer directory.
+- Improves logging of `TXCDSError` and `CommandError`, offering human-readable
+error strings.
