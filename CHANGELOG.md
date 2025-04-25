@@ -158,3 +158,10 @@ set to `false`.
 - Executes `xcodebuild` from active developer directory.
 - Improves logging of `TXCDSError` and `CommandError`, offering human-readable
 error strings.
+
+## Transifex Command Line Tool 2.1.8-alpha
+
+*May 2, 2025*
+
+- First experimental (alpha) release with support for the Custom Transifex
+Bundle approach.

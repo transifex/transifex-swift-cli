@@ -26,6 +26,8 @@ enum CommandError : Error, CustomStringConvertible {
     case outputDirectoryCreationFailure
     case outputFileWritingFailure
     case cdsCacheInvalidationFailure
+    case generateCustomBundleFailure
+    case dummyStringsFailure
     
     // Human-readable error codes
     public var description: String {
@@ -54,6 +56,10 @@ enum CommandError : Error, CustomStringConvertible {
             return "Writing to the output file failed"
         case .cdsCacheInvalidationFailure:
             return "CDS cache invalidation failed"
+        case .generateCustomBundleFailure:
+            return "Custom bundle failed to be generated"
+        case .dummyStringsFailure:
+            return "Failed to generate dummy strings file"
         }
     }
 }
@@ -72,7 +78,7 @@ that can be bundled with the iOS application.
 The tool can be also used to force CDS cache invalidation so that the next pull
 command will fetch fresh translations from CDS.
 """,
-        version: "2.1.7",
+        version: "2.1.8-alpha",
         subcommands: [Push.self, Pull.self, Invalidate.self])
 }
 
@@ -525,6 +531,40 @@ are missing.
 """)
     private var ignoreMissingLocales: Bool = false
 
+    enum ExportType: String, ExpressibleByArgument {
+        case json, bundle
+    }
+
+    @Option(name: .long, help: """
+The type of exported file.
+
+Provided either 'json' (default) to generate the `txstrings.json` file or
+'bundle' to generate the custom Transifex bundle `tx.bundle` container.
+
+NOTE: The custom Transifex bundle is EXPERIMENTAL
+""")
+    private var exportType: ExportType = .json
+
+    @Flag(name: .customLong("is-macos"), help: """
+Whether the generated custom Transifex bundle (--export-type bundle) is going to
+be used by a MacOS target or not (default: false).
+
+NOTE: The custom Transifex bundle is EXPERIMENTAL
+""")
+    private var isMacOS: Bool = false
+
+    @Flag(name: .long, help: """
+Whether to generate an accompanying `tx-dummy.strings` file when the custom
+Transifex bundle is enabled (--export-type bundle) which will address the
+localization issue on SwiftUI-only apps.
+
+For more see Transifex Native README.md under the "SwiftUI-only applications"
+section (default: false).
+
+NOTE: The custom Transifex bundle is EXPERIMENTAL
+""")
+    private var dummyStrings: Bool = false
+
     private static let HTTP_STATUS_CODE_NOT_FOUND = 404
 
     func run() throws {
@@ -607,22 +647,6 @@ are missing.
 [success]✓[end] [num]\(appTranslations.count)[end] [success]localizations fetched successfully[end]
 """)
         
-        var jsonData: Data?
-        
-        do {
-            jsonData = try JSONEncoder().encode(appTranslations)
-        }
-        catch {
-            logHandler.error("Error encoding translations: \(error)")
-        }
-        
-        guard let serializedData = jsonData,
-              let serializedTranslations = String(data: serializedData,
-                                                  encoding: .utf8) else {
-            logHandler.error("Error serializing translations")
-            throw CommandError.translationsEncodingFailure
-        }
-        
         var relativeURL: URL? = nil
         
         if !output.starts(with: "/") {
@@ -642,29 +666,95 @@ are missing.
             throw CommandError.outputDirectoryCreationFailure
         }
         
-        let outputFileURL = outputFolder.appendingPathComponent(TXNative.STRINGS_FILENAME)
-        
-        logHandler.info("[high]Writing file...[end]")
-        
-        do {
-            try serializedTranslations.write(to: outputFileURL,
-                                             atomically: true,
-                                             encoding: .utf8)
+        var outputFileURLs: [URL] = []
+
+        switch exportType {
+        case .json:
+            var jsonData: Data?
+
+            do {
+                jsonData = try JSONEncoder().encode(appTranslations)
+            }
+            catch {
+                logHandler.error("Error encoding translations: \(error)")
+            }
+
+            guard let serializedData = jsonData,
+                  let serializedTranslations = String(data: serializedData,
+                                                      encoding: .utf8) else {
+                logHandler.error("Error serializing translations")
+                throw CommandError.translationsEncodingFailure
+            }
+
+            let jsonFileURL = outputFolder
+                .appendingPathComponent(TXNative.STRINGS_FILENAME)
+
+            logHandler.info("[high]Writing file...[end]")
+
+            do {
+                try serializedTranslations.write(to: jsonFileURL,
+                                                 atomically: true,
+                                                 encoding: .utf8)
+            }
+            catch {
+                logHandler.error("Error writing to JSON file: \(error)")
+                throw CommandError.outputFileWritingFailure
+            }
+
+            outputFileURLs.append(jsonFileURL)
+
+        case .bundle:
+            var outputFileURL: URL?
+
+            do {
+                outputFileURL = try TXBundle.generateCustomBundle(with: appTranslations,
+                                                                  sourceLocale: sourceLocale,
+                                                                  at: outputFolder,
+                                                                  isMacOS: isMacOS)
+            }
+            catch {
+                logHandler.error("Error generating custom bundle: \(error)")
+                throw CommandError.generateCustomBundleFailure
+            }
+
+            if let outputFileURL = outputFileURL {
+                outputFileURLs.append(outputFileURL)
+            }
+
+            // Generate the `tx-dummy.xcstrings` file if needed
+            if dummyStrings {
+                let jsonFileURL = outputFolder
+                    .appendingPathComponent("tx-dummy.xcstrings")
+
+                do {
+                    try TXNative.generateDummyStringsFile(at: jsonFileURL,
+                                                          sourceLocale: sourceLocale,
+                                                          appLocales: translatedLocales)
+                }
+                catch {
+                    throw CommandError.dummyStringsFailure
+                }
+
+                outputFileURLs.append(jsonFileURL)
+            }
         }
-        catch {
-            logHandler.error("Error writing to file: \(error)")
+        
+        guard outputFileURLs.count > 0 else {
             throw CommandError.outputFileWritingFailure
         }
         
         logHandler.info("""
 [success]✓ Translations file has been successfully generated![end]
 
-[prompt]You can find the generated file at:[end]
-[file]\(outputFileURL.path)[end]
+[prompt]You can find the generated \(outputFileURLs.count > 1 ? "files" : "file") at:[end]
+""")
+        outputFileURLs.forEach({ outputFileURL in
+            logHandler.info("[prompt]*[end] [file]\(outputFileURL.path)[end]")
+        })
 
-[prompt]Copy the generated file to your Xcode project and make sure it is included in
-the 'Copy Bundle Resources' build phase, so that Transifex Native library can
-look it up upon your application's launch.[end]
+        logHandler.info("""
+[prompt]Copy the generated \(outputFileURLs.count > 1 ? "files" : "file") to your Xcode project and make sure
+\(outputFileURLs.count > 1 ? "they are" : "it is") included in the 'Copy Bundle Resources' build phase.[end]
 """)
     }
 }

@@ -24,17 +24,17 @@
         "repositoryURL": "https://github.com/apple/swift-argument-parser",
         "state": {
           "branch": null,
-          "revision": "9564d61b08a5335ae0a36f789a7d71493eacadfc",
-          "version": "0.3.2"
+          "revision": "6b2aa2748a7881eebb9f84fb10c01293e15b52ca",
+          "version": "0.5.0"
         }
       },
       {
         "package": "transifex",
         "repositoryURL": "https://github.com/transifex/transifex-swift",
         "state": {
-          "branch": null,
-          "revision": "f75ba230b938b95518a62cda364959de614bf4ef",
-          "version": "2.0.7"
+          "branch": "feature/custom-bundle",
+          "revision": "295f3ab8a34e538bc30568f1ee7836a0b4205bc6",
+          "version": null
         }
       }
     ]
