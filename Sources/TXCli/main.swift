@@ -211,7 +211,12 @@ translations on source content updates.
 Emulate a content push, without performing any actual changes.
 """)
     private var dryRun: Bool = false
-    
+
+    @Flag(name: .long, help: """
+Include strings that are marked as "Don't translate" (default: false)
+""")
+    private var includeNoTranslate: Bool = false
+
     @Option(name: .long,
             help: """
 Optional extra parameters to be passed on the internal xcodebuild call.
@@ -292,6 +297,7 @@ e.g.
         }
         
         guard let parser = XLIFFParser(fileURL: fileURL,
+                                       includeNoTranslate: includeNoTranslate,
                                        logHandler: logHandler) else {
             logHandler.error("Failed to initialize XLIFF parser")
             throw CommandError.xliffParserInitializationFailure

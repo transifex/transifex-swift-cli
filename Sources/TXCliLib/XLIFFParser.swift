@@ -490,6 +490,7 @@ public class XLIFFParser: NSObject {
     private static let XML_FILE_NAME = "file"
     private static let XML_ID_ATTRIBUTE = "id"
     private static let XML_ORIGINAL_ATTRIBUTE = "original"
+    private static let XML_TRANSLATE_ATTRIBUTE = "translate"
 
     private var pendingTranslationUnits: [PendingTranslationUnit] = []
     private var pendingPluralizationRules: [PluralizationRule] = []
@@ -528,16 +529,21 @@ public class XLIFFParser: NSObject {
     private var parser: XMLParser
     
     private let logHandler: TXLogHandler?
-    
+
+    private let includeNoTranslate: Bool
+
     /// Initializes the parser for a certain XLIFF file.
     ///
     /// If the file cannot be found, the constructor returns a nil object.
     ///
     /// - Parameters:
     ///   - fileURL: The url of the XLIFF file
+    ///   - includeNoTranslate: Include or skip strings marked as "Don't translate"
     ///   - logHandler: Optional log handler
     public init?(fileURL: URL,
+                 includeNoTranslate: Bool = false,
                  logHandler: TXLogHandler? = nil) {
+        self.includeNoTranslate = includeNoTranslate
         self.logHandler = logHandler
         
         logHandler?.verbose("[prompt]Initializing XLIFF parser for[end] [file]\(fileURL.path)[end][prompt]...[end]")
@@ -768,6 +774,13 @@ extension XLIFFParser : XMLParserDelegate {
         // <trans-unit id="{SOMETHING}">
         if elementName == Self.XML_TRANSUNIT_NAME,
            let id = attributeDict[Self.XML_ID_ATTRIBUTE] {
+
+            if !includeNoTranslate,
+               let translate = attributeDict[Self.XML_TRANSLATE_ATTRIBUTE],
+               translate == "no" {
+                logHandler?.verbose("[prompt]Skipping \"Don't translate\" key: \"\(id)\"[end]")
+                return
+            }
 
             if let pluralizationRule = PluralizationRule(with: id) {
                 activePluralizationRule = pluralizationRule
