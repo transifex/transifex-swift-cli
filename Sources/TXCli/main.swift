@@ -72,7 +72,7 @@ that can be bundled with the iOS application.
 The tool can be also used to force CDS cache invalidation so that the next pull
 command will fetch fresh translations from CDS.
 """,
-        version: "2.1.7",
+        version: "2.1.8",
         subcommands: [Push.self, Pull.self, Invalidate.self])
 }
 
@@ -356,10 +356,12 @@ e.g.
         
         logHandler.verbose("[high]Initializing TxNative...[end]")
         
-        TXNative.initialize(locales: TXLocaleState(sourceLocale: sourceLocale),
-                            token: transifexToken,
-                            secret: transifexSecret,
-                            cache: TXNoOpCache())
+        TXNativeBuilder()
+            .setLocales(TXLocaleState(sourceLocale: sourceLocale))
+            .setToken(transifexToken)
+            .setSecret(transifexSecret)
+            .setCache(TXNoOpCache())
+            .build()
         
         logHandler.info("""
 [high]Pushing[end] [num]\(translations.count)[end] [high]source strings to CDS ([end][prompt]Purge: \(purge ? "Yes" : "No")[end][high])...[end]
@@ -542,11 +544,12 @@ are missing.
         
         logHandler.info("[prompt]Initializing TxNative...[end]")
         
-        TXNative.initialize(locales: TXLocaleState(sourceLocale: sourceLocale,
-                                                   appLocales: translatedLocales),
-                            token: transifexToken,
-                            secret: nil,
-                            cache: TXNoOpCache())
+        TXNativeBuilder()
+            .setLocales(TXLocaleState(sourceLocale: sourceLocale,
+                                      appLocales: translatedLocales))
+            .setToken(transifexToken)
+            .setCache(TXNoOpCache())
+            .build()
         
         logHandler.info("[high]Fetching translations from CDS...[end]")
         
@@ -705,11 +708,13 @@ You can either provide the Transifex token and secret via enviroment variables
         
         logHandler.info("[prompt]Initializing TxNative...[end]")
         
-        TXNative.initialize(locales: TXLocaleState(sourceLocale: nil,
-                                                   appLocales: []),
-                            token: transifexToken,
-                            secret: transifexSecret,
-                            cache: TXNoOpCache())
+        TXNativeBuilder()
+            .setLocales(TXLocaleState(sourceLocale: nil,
+                                      appLocales: []))
+            .setToken(transifexToken)
+            .setSecret(transifexSecret)
+            .setCache(TXNoOpCache())
+            .build()
         
         logHandler.info("[high]Invalidating CDS cache...[end]")
         
