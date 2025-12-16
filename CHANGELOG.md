@@ -158,3 +158,10 @@ set to `false`.
 - Executes `xcodebuild` from active developer directory.
 - Improves logging of `TXCDSError` and `CommandError`, offering human-readable
 error strings.
+
+## Transifex Command Line Tool 2.1.8
+
+*December 16, 2025*
+
+- Updates Transifex Swift package dependency to 2.0.9.
+- Initializes the SDK using the builder pattern.
